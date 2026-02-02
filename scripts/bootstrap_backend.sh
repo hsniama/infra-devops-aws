@@ -1,0 +1,1 @@
+# crea bucket + dynamodb
