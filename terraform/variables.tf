@@ -13,7 +13,7 @@ variable "environment" {
 
 variable "project" {
   type    = string
-  default = "devops-assessment"
+  default = "devops-aws"
 }
 
 variable "vpc_cidr" {
