@@ -49,3 +49,10 @@ aws dynamodb create-table \
   || true
 
 echo "DONE."
+
+
+# Se ejecuta com:
+# chmod +x scripts/bootstrap_backend.sh
+# scripts/bootstrap_backend.sh <region> <bucket_name> <dynamodb_table>
+# En mi caso:
+# ./scripts/bootstrap_backend.sh us-east-1 tfstate-devops-henry-1720 tfstate-locks-devops
