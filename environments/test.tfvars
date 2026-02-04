@@ -1,8 +1,8 @@
-aws_region   = "us-east-1"
-environment  = "test"
-project      = "devops-aws"
+aws_region  = "us-east-1"
+environment = "test"
+project     = "devops-aws"
 
-vpc_cidr = "10.110.0.0/16"
+vpc_cidr             = "10.110.0.0/16"
 public_subnet_cidrs  = ["10.110.10.0/24", "10.110.11.0/24"]
 private_subnet_cidrs = ["10.110.20.0/24", "10.110.21.0/24"]
 
