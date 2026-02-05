@@ -29,3 +29,9 @@ variable "min_size" {
 variable "max_size" {
   type = number
 }
+
+variable "eks_public_access_cidrs" {
+  type        = list(string)
+  description = "CIDRs allowed to access EKS public API endpoint"
+  default     = []
+}

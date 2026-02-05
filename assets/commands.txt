@@ -1,0 +1,3 @@
+aws eks describe-cluster --region us-east-1 --name eksdevops1720test \
+  --query "cluster.resourcesVpcConfig.{private:endpointPrivateAccess,public:endpointPublicAccess,cidrs:publicAccessCidrs,subnets:subnetIds}" \
+  --output table
