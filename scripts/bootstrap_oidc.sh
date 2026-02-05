@@ -52,7 +52,9 @@ cat > "${TMP_TRUST}" <<EOF
           "${OIDC_URL}:sub": [
             "repo:${REPO_FULL}:ref:refs/heads/main",
             "repo:${REPO_FULL}:ref:refs/heads/dev/*",
-            "repo:${REPO_FULL}:pull_request"
+            "repo:${REPO_FULL}:pull_request",
+            "repo:${REPO_FULL}:environment:test",
+            "repo:${REPO_FULL}:environment:prod"
           ]
         }
       }

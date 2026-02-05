@@ -132,6 +132,12 @@ AWS_ROLE_TO_ASSUME = arn:aws:iam::035462351040:role/gh-oidc-terraform-infra-devo
 
     ![Policy attached](./assets/img/5.png)
 
+En resumen:
+
+- GitHub genera un token OIDC → incluye sub.
+- AWS recibe el token → busca el rol → revisa la trust policy.
+- Si el sub del token coincide con alguno de los patrones permitidos, AWS deja asumir el rol.
+
 ### 4. Configurar GitHub Actions
 
 En tu repositorio de GitHub (hsniama/infra-devops-aws):
