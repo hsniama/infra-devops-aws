@@ -2,9 +2,9 @@ aws_region  = "us-east-1"
 environment = "prod"
 project     = "devops-aws"
 
-vpc_cidr             = "10.111.0.0/16"
-public_subnet_cidrs  = ["10.111.10.0/24", "10.111.11.0/24"]
-private_subnet_cidrs = ["10.111.20.0/24", "10.111.21.0/24"]
+vpc_cidr                = "10.111.0.0/16"
+public_subnet_cidrs     = ["10.111.10.0/24", "10.111.11.0/24"]
+private_subnet_cidrs    = ["10.111.20.0/24", "10.111.21.0/24"]
 eks_public_access_cidrs = ["149.50.197.136/32"] // Aqui agregas tu IP pública para acceder al endpoint público de EKS. Usar curl ifconfig.me para saber tu IP.  
 
 

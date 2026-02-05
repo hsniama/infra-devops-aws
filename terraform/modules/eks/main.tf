@@ -8,7 +8,7 @@ module "eks" {
   vpc_id     = var.vpc_id             //  ID de la VPC donde se desplegará el clúster.
   subnet_ids = var.private_subnet_ids // lista de subnets privadas donde se ubicarán los nodos del clúster.
 
- # Para poder usar kubectl desde fuera (mi laptop)
+  # Para poder usar kubectl desde fuera (mi laptop)
   cluster_endpoint_public_access  = true
   cluster_endpoint_private_access = true
 

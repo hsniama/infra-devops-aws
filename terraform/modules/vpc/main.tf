@@ -27,6 +27,7 @@ resource "aws_subnet" "public" {
   tags = {
     Name                     = "${var.name_prefix}-public-${count.index}"
     "kubernetes.io/role/elb" = "1" # Subnets públicas (para balanceadores accesibles desde Internet).
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared" # Tag para que EKS reconozca las subnets.
   }
 }
 
@@ -50,6 +51,7 @@ resource "aws_route_table_association" "public_assoc" { //Asocia cada subnet pú
   route_table_id = aws_route_table.public.id // Así, todas las subnets públicas heredan la ruta hacia Internet.
 }
 
+// PRIVADAS
 
 resource "aws_subnet" "private" {
   count             = length(var.private_subnet_cidrs)
@@ -60,10 +62,9 @@ resource "aws_subnet" "private" {
   tags = {
     Name                              = "${var.name_prefix}-private-${count.index}"
     "kubernetes.io/role/internal-elb" = "1" # Subnets privadas (para balanceadores internos).
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared" # Tag para que EKS reconozca las subnets.
   }
 }
-
-// PRIVADAS
 
 # EIP para NAT Gateway
 resource "aws_eip" "nat" {

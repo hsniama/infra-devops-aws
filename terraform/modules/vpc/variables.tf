@@ -16,3 +16,8 @@ variable "public_subnet_cidrs" {
 variable "private_subnet_cidrs" {
   type = list(string)
 }
+
+variable "cluster_name" {
+  type = string
+  description = "Nombre del cluster EKS para tagging de subnets"
+}
