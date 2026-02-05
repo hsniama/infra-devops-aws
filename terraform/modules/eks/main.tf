@@ -26,12 +26,12 @@ module "eks" {
     }
   }
 
-  authentication_mode = "API_AND_CONFIG_MAP"
+  authentication_mode = "CONFIG_MAP"
 
   access_entries = {
     terraformUser = {
       principal_arn     = "arn:aws:iam::035462351040:user/terraformUser"
-      kubernetes_groups = ["system:masters"]
+      kubernetes_groups = ["system:masters"] // otorga permisos de administrador en Kubernetes a este usuario IAM
     }
     # companero2 = {
     #   principal_arn     = "arn:aws:iam::035462351040:user/companero"
