@@ -58,12 +58,11 @@ jobs:
           fi
 
       - name: Debug OIDC token
-        id: debug-oidc
         run: |
-          echo "Dumping OIDC token claims..."
-          TOKEN=$(curl -sLS "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com"
+            echo "Dumping OIDC token claims..."
+            TOKEN=$(curl -sLS "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
             -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" | jq -r '.value')
-          echo "$TOKEN" | cut -d '.' -f2 | base64 -d | jq .
+            echo "$TOKEN" | cut -d '.' -f2 | base64 -d | jq .
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
