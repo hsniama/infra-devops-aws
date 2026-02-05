@@ -51,7 +51,7 @@ cat > "${TMP_TRUST}" <<EOF
         "StringLike": {
           "${OIDC_URL}:sub": [
             "repo:${REPO_FULL}:ref:refs/heads/main",
-            "repo:${REPO_FULL}:ref:refs/heads/test/*",
+            "repo:${REPO_FULL}:ref:refs/heads/dev/*",
             "repo:${REPO_FULL}:pull_request"
           ]
         }

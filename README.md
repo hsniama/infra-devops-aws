@@ -62,15 +62,18 @@ Permite crear y administrar roles y policies IAM necesarias para el pipeline.
     {
       "Effect": "Allow",
       "Action": [
-        "iam:CreateRole",
-        "iam:GetRole",
-        "iam:UpdateAssumeRolePolicy",
-        "iam:AttachRolePolicy",
-        "iam:CreatePolicy",
-        "iam:GetPolicy",
-        "iam:CreatePolicyVersion",
-        "iam:ListPolicyVersions",
-        "iam:DeletePolicyVersion"
+				"iam:CreateRole",
+				"iam:GetRole",
+				"iam:UpdateAssumeRolePolicy",
+				"iam:AttachRolePolicy",
+				"iam:CreatePolicy",
+				"iam:GetPolicy",
+				"iam:CreatePolicyVersion",
+				"iam:ListPolicyVersions",
+				"iam:DetachRolePolicy",
+				"iam:DeletePolicyVersion",
+				"iam:DeletePolicy",
+        "iam:DeleteRole"
       ],
       "Resource": "*"
     }
