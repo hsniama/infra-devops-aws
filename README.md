@@ -150,11 +150,50 @@ En mi caso, la policy se configura de esta manera:
 "Resource": "arn:aws:dynamodb:us-east-1:035462351040:table/tfstate-locks-devops"
 ```
 
-Despues de crear estas 3 Policy en IAM, las enlazamos a nuestro usuario, en mi caso es el usuario `terraformUser` y ya se puede ejecutar los scripts del siguiente apartado. 
+### 2.4 Policy: `TerraformEKSAccess`
+Esta policy hace lo siguiente:
 
-![Usuario Terraform con 2 Policies](./assets/img/2.png)
+- **eks:ListClusters** → el usuario puede listar todos los clusters EKS en la cuenta.
+- **eks:DescribeCluster** → el usuario puede obtener los detalles de un cluster específico (endpoint, OIDC issuer, configuración, etc.).
 
-### 3. Ejecutar el script de bootstrap
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "EKSClusterAccess",
+            "Effect": "Allow",
+            "Action": [
+                "eks:DescribeCluster",
+                "eks:ListClusters"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+Ojo: No da permisos para crear pods, deployments, services, etc. → eso lo maneja Kubernetes RBAC (ej. system:masters), ver el modulo eks el archivo main.tf.
+
+FInalmente, despues de crear estas 4 Policy en IAM, las enlazamos a nuestro usuario, en mi caso es el usuario `terraformUser` y ya se puede ejecutar los scripts del siguiente apartado. 
+
+![Usuario Terraform con 4 Policies](./assets/img/2.png)
+
+### 3. Ejecutar el script de bootstrap_backend.sh
+
+Este script es un Bootstrap de Backend para Terraform. Su función es preparar automáticamente "la casa" donde Terraform guardará su archivo de estado (.tfstate) antes de lanzar cualquier infraestructura.
+
+```bash
+chmod +x scripts/bootstrap_backend.sh
+scripts/bootstrap_backend.sh <region> <bucket_name> <dynamodb_table>
+```
+Ejemplo:
+
+```bash
+./scripts/bootstrap_backend.sh us-east-1 tfstate-devops-henry-1720 tfstate-locks-devops
+```
+En donde <region> es la región de AWS en la cual estamos trabajando, <bucket_name> es el nombre completo del bucket a crear, y <dynamodb_table> es el nombre de la tabla de dynamodb.
+
+### 4. Ejecutar el script de bootstrap
 Con las credenciales del usuario `terraformUser` configuradas en nuestro entorno local o de desarrollo (~/.aws/credentials o variables de entorno), ejecuta en tu terminal:
 
 ```bash
@@ -183,7 +222,6 @@ DONE.
 Set this GitHub secret in infra-devops-aws repo:
 AWS_ROLE_TO_ASSUME = arn:aws:iam::035462351040:role/gh-oidc-terraform-infra-devops-aws
 ```
-
 
 #### ¿Qué hace el script?
 - Crea/valida el OIDC Provider de GitHub (token.actions.githubusercontent.com).

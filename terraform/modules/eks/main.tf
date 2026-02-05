@@ -25,4 +25,23 @@ module "eks" {
       desired_size   = var.desired_size
     }
   }
+
+  authentication_mode = "API_AND_CONFIG_MAP"
+
+  access_entries = {
+    terraformUser = {
+      principal_arn     = "arn:aws:iam::035462351040:user/terraformUser"
+      kubernetes_groups = ["system:masters"]
+    }
+    # companero2 = {
+    #   principal_arn     = "arn:aws:iam::035462351040:user/companero"
+    #   kubernetes_groups = ["system:masters"]
+    # }
+    # devops_team = {
+    #   principal_arn     = "arn:aws:iam::035462351040:role/DevOpsTeamRole"
+    #   kubernetes_groups = ["system:masters"]
+    # }
+  }
+
+
 }
