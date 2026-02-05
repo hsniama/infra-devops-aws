@@ -1,0 +1,76 @@
+aws eks describe-cluster --region us-east-1 --name eksdevops1720test \
+  --query "cluster.resourcesVpcConfig.{private:endpointPrivateAccess,public:endpointPublicAccess,cidrs:publicAccessCidrs,subnets:subnetIds}" \
+  --output table
+
+
+Una ves tengo los outputs:
+0. Verificar:
+
+aws eks update-kubeconfig --region us-east-1 --name eksdevops1720test
+kubectl get nodes
+
+1. Autenticarse contra el cluster EKS. El DevOps ejecuta:
+  aws eks update-kubeconfig --region us-east-1 --name eksdevops1728test
+Esto configura kubectl para hablar con tu cluster.
+
+2- Construir y subir la imagen a ECR
+Usando el output ECR Repo URL:
+
+aws ecr get-login-password --region us-east-1 \
+  | docker login --username AWS --password-stdin 035462531040.dkr.ecr.us-east-1.amazonaws.com
+
+docker build -t devops-microservice-test .
+docker tag devops-microservice-test:latest \
+  035462531040.dkr.ecr.us-east-1.amazonaws.com/devops-microservice-test:latest
+
+docker push 035462531040.dkr.ecr.us-east-1.amazonaws.com/devops-microservice-test:latest
+
+3. Crear manifiestos de Kubernetes (YAML)
+
+Deployment que usa la imagen de ECR:
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: microservice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: microservice
+  template:
+    metadata:
+      labels:
+        app: microservice
+    spec:
+      containers:
+      - name: microservice
+        image: 035462531040.dkr.ecr.us-east-1.amazonaws.com/devops-microservice-test:latest
+        ports:
+        - containerPort: 8080
+
+Service para exponerlo dentro del cluster:
+apiVersion: v1
+kind: Service
+metadata:
+  name: microservice-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: microservice
+  ports:
+  - port: 80
+    targetPort: 8080
+
+4. Aplciar mediante otro pipeline en otro repo, los manifiestos del cluster:
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
+
+5. Verificar
+kubectl get pods
+kubectl get svc
+
+Los outputs son suficientes:
+
+- Cluster name y endpoint → para conectar kubectl.
+- ECR repo URL → para subir y referenciar imágenes.
+- OIDC issuer → útil si configuramos IRSA (roles para service accounts).
