@@ -34,7 +34,7 @@ else
 fi
 
 # 2) Create trust policy for repo (only this repo, and only specific branches)
-#    - Allow main and test/** pushes (matches your workflow logic)
+#    - Allow main and dev/** pushes (matches your workflow logic)
 TMP_TRUST="$(mktemp)"
 cat > "${TMP_TRUST}" <<EOF
 {
