@@ -25,8 +25,8 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true // Asigna automáticamente IPs públicas a las instancias lanzadas en estas subnets.
 
   tags = {
-    Name                     = "${var.name_prefix}-public-${count.index}"
-    "kubernetes.io/role/elb" = "1" # Subnets públicas (para balanceadores accesibles desde Internet).
+    Name                                        = "${var.name_prefix}-public-${count.index}"
+    "kubernetes.io/role/elb"                    = "1"      # Subnets públicas (para balanceadores accesibles desde Internet).
     "kubernetes.io/cluster/${var.cluster_name}" = "shared" # Tag para que EKS reconozca las subnets.
   }
 }
@@ -60,8 +60,8 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.azs.names[count.index]
 
   tags = {
-    Name                              = "${var.name_prefix}-private-${count.index}"
-    "kubernetes.io/role/internal-elb" = "1" # Subnets privadas (para balanceadores internos).
+    Name                                        = "${var.name_prefix}-private-${count.index}"
+    "kubernetes.io/role/internal-elb"           = "1"      # Subnets privadas (para balanceadores internos).
     "kubernetes.io/cluster/${var.cluster_name}" = "shared" # Tag para que EKS reconozca las subnets.
   }
 }
