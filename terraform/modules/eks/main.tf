@@ -9,11 +9,11 @@ module "eks" {
   subnet_ids = var.private_subnet_ids // lista de subnets privadas donde se ubicarán los nodos del clúster.
 
   # Para poder usar kubectl desde fuera (mi laptop)
-  cluster_endpoint_public_access  = true
-  cluster_endpoint_private_access = true
+  # cluster_endpoint_public_access  = true
+  # cluster_endpoint_private_access = true
 
   # Recomendado: restringe el acceso público a tu IP
-  cluster_endpoint_public_access_cidrs = var.eks_public_access_cidrs
+  # cluster_endpoint_public_access_cidrs = var.eks_public_access_cidrs
 
   // Los nodos suelen estar en subnets privadas para mayor seguridad, mientras que los balanceadores se crean en subnets públicas.
 
