@@ -57,12 +57,6 @@ jobs:
             echo "TF_LOG=DEBUG" >> $GITHUB_ENV
           fi
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ vars.AWS_REGION }}
-
       - name: Debug OIDC token
         id: debug-oidc
         run: |
@@ -70,6 +64,12 @@ jobs:
           TOKEN=$(curl -sLS "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com"
             -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" | jq -r '.value')
           echo "$TOKEN" | cut -d '.' -f2 | base64 -d | jq .
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Terraform fmt (check)
         run: terraform fmt -check -recursive
