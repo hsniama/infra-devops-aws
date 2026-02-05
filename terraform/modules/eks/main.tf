@@ -42,6 +42,4 @@ module "eks" {
     #   kubernetes_groups = ["system:masters"]
     # }
   }
-
-
 }
