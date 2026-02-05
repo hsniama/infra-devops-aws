@@ -1,6 +1,6 @@
 # infra-devops-aws
 
-# Configuración de OIDC en AWS para GitHub Actions + Terraform
+# Configuración de OIDC en AWS para GitHub Actions y Bucket S3 más DynamoDB para estado de Terraform
 
 Este documento describe cómo configurar un **OpenID Connect (OIDC) Provider** en AWS IAM para permitir que un repositorio de GitHub use **GitHub Actions** y despliegue infraestructura con **Terraform** en AWS **sin usar credenciales estáticas**.
 
@@ -31,7 +31,7 @@ Este usuario será el que ejecute el script de bootstrap_oidc.sh y bootstrap_bac
 
 ## 2. Crear las políticas necesarias
 
-El usuario `terraformUser` necesita permisos específicos para poder crear el OIDC Provider y los roles asociados. Creamos **dos políticas administradas por el cliente**:
+El usuario `terraformUser` necesita permisos específicos para poder crear el OIDC Provider y los roles asociados. Creamos **tres políticas administradas por el cliente**:
 
 ### 2.1 Policy: `OpenIDConnectProviderAccess`
 Permite crear y administrar el OIDC Provider de GitHub.
@@ -80,9 +80,79 @@ Permite crear y administrar roles y policies IAM necesarias para el pipeline.
   ]
 }
 ```
-Adjuntamoa esta 2 policy al usuario terraformUser:
+### 2.3 Policy: `TerraformBackendAccess`
+Esta es una Policy que combina los permisos mínimos necesarios para que Terraform pueda usar un bucket S3 como backend y una tabla DynamoDB para locks.
 
-![Usuario Terraform con 2 Polocies](./assets/img/2.png)
+La policy esta divida en 3 bloques:
+- **Bloque 1 (Bucket)** → permisos sobre el bucket en sí (listar, versioning, encryption, public access block).
+- **Bloque 2 (Objetos)** → permisos sobre los objetos dentro del bucket (leer, escribir, borrar).
+- **Bloque 3 (DynamoDB)** → permisos para crear, describir, borrar y usar la tabla de locks.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "TerraformStateS3Bucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+        "s3:GetBucketVersioning",
+        "s3:PutBucketVersioning",
+        "s3:GetEncryptionConfiguration",
+        "s3:PutEncryptionConfiguration",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:PutBucketPublicAccessBlock"
+      ],
+      "Resource": "arn:aws:s3:::tfstate-devops-henry-1720"
+    },
+    {
+      "Sid": "TerraformStateS3Objects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::<BUCKET_NAME>/*"
+    },
+    {
+      "Sid": "TerraformLockDynamoDB",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:CreateTable",
+        "dynamodb:DescribeTable",
+        "dynamodb:DeleteTable",
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:UpdateItem"
+      ],
+      "Resource": "arn:aws:dynamodb:<REGION>:<ACCOUNT_ID>:table/<TABLE_NAME>"
+    }
+  ]
+}
+
+```
+#### ¿Cómo usar esta Policy?
+Sustituye:
+
+- `<BUCKET_NAME>` → el nombre de tu bucket S3 para el estado.
+- `<REGION>` → la región donde creas la tabla DynamoDB.
+- `<ACCOUNT_ID>` → tu AWS account ID.
+- `<TABLE_NAME>` → el nombre de la tabla DynamoDB para locks.
+
+En mi caso, la policy se configura de esta manera:
+
+```bash
+"Resource": "arn:aws:s3:::tfstate-devops-henry-1720/*"
+"Resource": "arn:aws:dynamodb:us-east-1:035462351040:table/tfstate-locks-devops"
+```
+
+Despues de crear estas 3 Policy en IAM, las enlazamos a nuestro usuario, en mi caso es el usuario `terraformUser` y ya se puede ejecutar los scripts del siguiente apartado. 
+
+![Usuario Terraform con 2 Policies](./assets/img/2.png)
 
 ### 3. Ejecutar el script de bootstrap
 Con las credenciales del usuario `terraformUser` configuradas en nuestro entorno local o de desarrollo (~/.aws/credentials o variables de entorno), ejecuta en tu terminal:
@@ -96,7 +166,7 @@ Ejemplo:
 ```bash
 ./scripts/bootstrap_oidc.sh 035462351040 hsniama/infra-devops-aws gh-oidc-terraform-infra-devops-aws us-east-1
 ```
-En donde <account_id> es el ID de tu cuenta, <repo_full_name> es el nombre completo de tu repositorio, <role_name> es el nombre del rol que asignamos y <region> es la región de AWS en la cual estamos trabajando.
+En donde <account_id> es el ID de tu cuenta, <repo_full_name> es el nombre completo de tu repositorio de GitHub, <role_name> es el nombre del rol que asignamos, puede ser el mismo y <region> es la región de AWS en la cual estamos trabajando.
 
 Al ejecutar el script correctamente verás algo como:
 
