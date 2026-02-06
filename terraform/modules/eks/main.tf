@@ -20,7 +20,7 @@ module "eks" {
   access_entries = {
     terraform_user_admin = {
       principal_arn = var.user_eks_admin_arn
-      policy_association = {
+      policy_associations = {
         admin = {
           policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
           access_scope = {
