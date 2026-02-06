@@ -10,7 +10,7 @@ eks_name      = "eksdevops1720prod"        // nombre del clúster EKS a tu elecc
 ecr_repo_name = "devops-microservice-prod" // nombre del repositorio ECR a tu elección
 
 eks_access_entries = {
-  terraform_user = {
+  terraform_user_admin = {
     principal_arn = "arn:aws:iam::035462351040:user/terraformUser" // Poner el ARN de tu usuario IAM de administración de EKS
     policies = {
       admin = {
@@ -38,6 +38,7 @@ node_instance_types = ["t3.medium"] // poner los tipos de instancia que desees p
 node_desired_size   = 2
 node_min_size       = 2
 node_max_size       = 5
+node_ami_type       = "AL2023_x86_64" // Amazon Linux 2, optimizada para EKS
 
 tags = {
   project = "devops-aws"

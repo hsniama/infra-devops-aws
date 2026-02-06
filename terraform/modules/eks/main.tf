@@ -3,7 +3,7 @@ module "eks" {
   version = "~> 20.0"
 
   cluster_name    = var.eks_name
-  cluster_version = "1.29" // versión de Kubernetes que correrá en EKS
+  cluster_version = "1.31" // versión de Kubernetes que correrá en EKS
 
   vpc_id     = var.vpc_id             //  ID de la VPC donde se desplegará el clúster.
   subnet_ids = var.private_subnet_ids // lista de subnets privadas donde se ubicarán los nodos del clúster.
@@ -37,6 +37,7 @@ module "eks" {
       min_size       = var.min_size
       max_size       = var.max_size
       desired_size   = var.desired_size
+      ami_type       = var.ami_type // Amazon Linux 2, optimizada para EKS
     }
   }
 

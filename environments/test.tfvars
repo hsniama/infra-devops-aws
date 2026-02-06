@@ -38,6 +38,7 @@ node_instance_types = ["t3.medium"] // poner los tipos de instancia que desees p
 node_desired_size   = 2
 node_min_size       = 2
 node_max_size       = 5
+node_ami_type       = "AL2023_x86_64" // Amazon Linux 2, optimizada para EKS
 
 tags = {
   project = "devops-aws"

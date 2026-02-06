@@ -30,6 +30,10 @@ variable "max_size" {
   type = number
 }
 
+variable "ami_type" {
+  type = string
+}
+
 variable "eks_access_entries" {
   description = "Mapa de usuarios/roles con sus policies para acceso al cluster EKS"
   type = map(object({

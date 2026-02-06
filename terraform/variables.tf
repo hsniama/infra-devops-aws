@@ -50,6 +50,10 @@ variable "node_max_size" {
   default = 5
 }
 
+variable "node_ami_type" {
+  type = string
+}
+
 variable "ecr_repo_name" {
   type = string
 }
