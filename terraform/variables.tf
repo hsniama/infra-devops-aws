@@ -58,3 +58,7 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "user_eks_admin_arn" {
+  type = string
+}
