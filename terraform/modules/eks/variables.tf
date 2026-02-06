@@ -29,3 +29,7 @@ variable "min_size" {
 variable "max_size" {
   type = number
 }
+
+variable "user_eks_admin_arn" {
+  type = string
+}

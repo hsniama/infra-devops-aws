@@ -1,6 +1,5 @@
 variable "aws_region" {
   type    = string
-  default = "us-east-1"
 }
 
 variable "environment" {
@@ -34,7 +33,6 @@ variable "eks_name" {
 
 variable "node_instance_types" {
   type    = list(string)
-  default = ["t3.medium"]
 }
 
 variable "node_desired_size" {
