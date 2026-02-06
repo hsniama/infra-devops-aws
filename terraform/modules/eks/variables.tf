@@ -30,8 +30,18 @@ variable "max_size" {
   type = number
 }
 
-variable "eks_public_access_cidrs" {
-  type        = list(string)
-  description = "CIDRs allowed to access EKS public API endpoint"
-  default     = []
+variable "ami_type" {
+  type = string
 }
+
+variable "eks_access_entries" {
+  description = "Mapa de usuarios/roles con sus policies para acceso al cluster EKS"
+  type = map(object({
+    principal_arn = string
+    policies = map(object({
+      policy_arn        = string
+      access_scope_type = string
+    }))
+  }))
+}
+

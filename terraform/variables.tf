@@ -1,6 +1,5 @@
 variable "aws_region" {
-  type    = string
-  default = "us-east-1"
+  type = string
 }
 
 variable "environment" {
@@ -33,8 +32,7 @@ variable "eks_name" {
 }
 
 variable "node_instance_types" {
-  type    = list(string)
-  default = ["t3.medium"]
+  type = list(string)
 }
 
 variable "node_desired_size" {
@@ -52,6 +50,10 @@ variable "node_max_size" {
   default = 5
 }
 
+variable "node_ami_type" {
+  type = string
+}
+
 variable "ecr_repo_name" {
   type = string
 }
@@ -59,4 +61,15 @@ variable "ecr_repo_name" {
 variable "tags" {
   type    = map(string)
   default = {}
+}
+
+variable "eks_access_entries" {
+  description = "Mapa de usuarios/roles con sus policies para acceso al cluster EKS"
+  type = map(object({
+    principal_arn = string
+    policies = map(object({
+      policy_arn        = string
+      access_scope_type = string
+    }))
+  }))
 }

@@ -3,11 +3,17 @@ aws eks describe-cluster --region us-east-1 --name eksdevops1720test \
   --output table
 
 
-Una ves tengo los outputs:
+Una ves tengo los outputs (infra desplegada ya sea en test  o prod):
 0. Verificar:
+Confirmar que estás con el usuario correcto:
+aws sts get-caller-identity
 
+Regenera kubeconfig:
 aws eks update-kubeconfig --region us-east-1 --name eksdevops1720test
+
+Prueba:
 kubectl get nodes
+kubectl get ns
 
 1. Autenticarse contra el cluster EKS. El DevOps ejecuta:
   aws eks update-kubeconfig --region us-east-1 --name eksdevops1728test
@@ -61,7 +67,7 @@ spec:
   - port: 80
     targetPort: 8080
 
-4. Aplciar mediante otro pipeline en otro repo, los manifiestos del cluster:
+4. Aplicar mediante otro pipeline en otro repo, los manifiestos del cluster:
 kubectl apply -f deployment.yaml
 kubectl apply -f service.yaml
 
@@ -74,3 +80,29 @@ Los outputs son suficientes:
 - Cluster name y endpoint → para conectar kubectl.
 - ECR repo URL → para subir y referenciar imágenes.
 - OIDC issuer → útil si configuramos IRSA (roles para service accounts).
+
+
+Nota:
+
+Más comandos útiles:
+aws eks list-access-entries --cluster-name eksdevops1720test --region us-east-1
+
+Qué hace: lista todos los Access Entries configurados en tu cluster EKS.
+Un Access Entry es el vínculo entre un principal de IAM (usuario o rol) y las políticas de acceso al cluster (ej. admin, readonly).
+El resultado te muestra cada ARN que tiene acceso al cluster y qué policies están asociadas.
+Es como decir: “Muéstrame todos los usuarios/roles que tienen permisos en este cluster”.
+
+aws eks describe-access-entry \
+  --cluster-name eksdevops1720test \
+  --region us-east-1 \
+  --principal-arn arn:aws:iam::035462351040:user/terraformUser
+
+Qué hace: describe en detalle el Access Entry de un principal específico (en este caso, el usuario terraformUser).
+
+Te devuelve:
+
+- El ARN del principal.
+- Las policies asociadas (ej. AmazonEKSClusterAdminPolicy, AmazonEKSViewPolicy).
+- El scope (ej. cluster o namespace).
+- Estado y metadatos.
+- Es como decir: “Muéstrame exactamente qué permisos tiene este usuario dentro del cluster”.
