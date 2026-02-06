@@ -1,5 +1,5 @@
 variable "aws_region" {
-  type    = string
+  type = string
 }
 
 variable "environment" {
@@ -32,7 +32,7 @@ variable "eks_name" {
 }
 
 variable "node_instance_types" {
-  type    = list(string)
+  type = list(string)
 }
 
 variable "node_desired_size" {
