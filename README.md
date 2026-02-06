@@ -193,7 +193,11 @@ Ejemplo:
 ```
 En donde <region> es la región de AWS en la cual estamos trabajando, <bucket_name> es el nombre completo del bucket a crear, y <dynamodb_table> es el nombre de la tabla de dynamodb.
 
-### 4. Ejecutar el script de bootstrap
+Como resultado, en AWS tendremos la creación de un bucket, vacío, y cuando despleguemos posteriormente la infraestructura, se crearán las carpetas de test y prod como se observa a continuación:
+
+  ![Bucket Creado](./assets/img/7.png)
+
+### 4. Ejecutar el script de bootstrap_oidc.sh
 Con las credenciales del usuario `terraformUser` configuradas en nuestro entorno local o de desarrollo (~/.aws/credentials o variables de entorno), ejecuta en tu terminal:
 
 ```bash
@@ -222,6 +226,9 @@ DONE.
 Set this GitHub secret in infra-devops-aws repo:
 AWS_ROLE_TO_ASSUME = arn:aws:iam::035462351040:role/gh-oidc-terraform-infra-devops-aws
 ```
+Como resultado, se tendrá el rol `gh-oidc-terraform-infra-devops-aws` y el policy `gh-oidc-terraform-infra-devops-aws-policy` enlazado.
+
+  ![Rol Creado](./assets/img/8.png)
 
 #### ¿Qué hace el script?
 - Crea/valida el OIDC Provider de GitHub (token.actions.githubusercontent.com).

@@ -3,7 +3,7 @@ aws eks describe-cluster --region us-east-1 --name eksdevops1720test \
   --output table
 
 
-Una ves tengo los outputs:
+Una ves tengo los outputs (infra desplegada ya sea en test  o prod):
 0. Verificar:
 
 aws eks update-kubeconfig --region us-east-1 --name eksdevops1720test
