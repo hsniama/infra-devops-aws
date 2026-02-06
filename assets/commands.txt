@@ -5,9 +5,15 @@ aws eks describe-cluster --region us-east-1 --name eksdevops1720test \
 
 Una ves tengo los outputs (infra desplegada ya sea en test  o prod):
 0. Verificar:
+Confirmar que estás con el usuario correcto:
+aws sts get-caller-identity
 
+Regenera kubeconfig:
 aws eks update-kubeconfig --region us-east-1 --name eksdevops1720test
+
+Prueba:
 kubectl get nodes
+kubectl get ns
 
 1. Autenticarse contra el cluster EKS. El DevOps ejecuta:
   aws eks update-kubeconfig --region us-east-1 --name eksdevops1728test

@@ -59,6 +59,13 @@ variable "tags" {
   default = {}
 }
 
-variable "user_eks_admin_arn" {
-  type = string
+variable "eks_access_entries" {
+  description = "Mapa de usuarios/roles con sus policies para acceso al cluster EKS"
+  type = map(object({
+    principal_arn = string
+    policies = map(object({
+      policy_arn        = string
+      access_scope_type = string
+    }))
+  }))
 }

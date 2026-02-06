@@ -18,25 +18,13 @@ module "eks" {
   authentication_mode = "API_AND_CONFIG_MAP"
 
   access_entries = {
-    terraform_user_admin = {
-      principal_arn = var.user_eks_admin_arn
+    for k, v in var.eks_access_entries : k => {
+      principal_arn = v.principal_arn
       policy_associations = {
-        admin = {
-          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+        for name, policy in v.policies : name => {
+          policy_arn = policy.policy_arn
           access_scope = {
-            type = "cluster"
-          }
-        }
-      }
-    }
-    # también dejamos de admin al role OIDC que crea/despliega
-    github_oidc_admin = {
-      principal_arn = "arn:aws:iam::035462351040:role/gh-oidc-terraform-infra-devops-aws"
-      policy_associations = {
-        admin = {
-          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-          access_scope = {
-            type = "cluster"
+            type = policy.access_scope_type
           }
         }
       }

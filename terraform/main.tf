@@ -28,5 +28,6 @@ module "eks" {
   desired_size        = var.node_desired_size
   min_size            = var.node_min_size
   max_size            = var.node_max_size
-  user_eks_admin_arn  = var.user_eks_admin_arn
+
+  eks_access_entries = var.eks_access_entries
 }
