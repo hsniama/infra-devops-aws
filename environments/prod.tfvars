@@ -1,16 +1,16 @@
 aws_region  = "us-east-1"
 environment = "prod"
-project     = "devops-aws"
+project     = "infra-aws"
 
 vpc_cidr             = "10.111.0.0/16"
 public_subnet_cidrs  = ["10.111.10.0/24", "10.111.11.0/24"]
 private_subnet_cidrs = ["10.111.20.0/24", "10.111.21.0/24"]
 
-eks_name      = "eksdevops1720prod"        // nombre del clúster EKS a tu elección
-ecr_repo_name = "devops-microservice-prod" // nombre del repositorio ECR a tu elección
+eks_name      = "eksdevops1720prod" // nombre del clúster EKS a tu elección. Es único a nivel global.
+ecr_repo_name = "ecrdevops1720prod" // nombre del repositorio ECR a tu elección. Es único a nivel global.
 
 eks_access_entries = {
-  terraform_user_admin = {
+  terraform_user = {
     principal_arn = "arn:aws:iam::035462351040:user/terraformUser" // Poner el ARN de tu usuario IAM de administración de EKS
     policies = {
       admin = {
@@ -38,10 +38,10 @@ node_instance_types = ["t3.medium"] // poner los tipos de instancia que desees p
 node_desired_size   = 2
 node_min_size       = 2
 node_max_size       = 5
-node_ami_type       = "BOTTLEROCKET_x86_64" // Amazon Linux 2, optimizada para EKS
+node_ami_type       = "BOTTLEROCKET_x86_64" // Elegir el tipo de AMI que desees para los nodos del clúster. BOTTLEROCKET_x86_64 es una buena opción optimizada para EKS, pero también puedes usar por ejemplo AL2_x86_64 o AL2_ARM_64 dependiendo de tus necesidades y preferencias.
 
 tags = {
-  project = "devops-aws"
+  project = "infra-aws"
   owner   = "henry"
   env     = "prod"
 }
