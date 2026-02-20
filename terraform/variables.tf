@@ -12,7 +12,7 @@ variable "environment" {
 
 variable "project" {
   type    = string
-  default = "devops-aws"
+  default = "infra-aws"
 }
 
 variable "vpc_cidr" {

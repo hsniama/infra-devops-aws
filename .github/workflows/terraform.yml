@@ -5,18 +5,9 @@ on:
     branches: ["main"] # PR contra main → plan prod
   push:
     branches:
-      - "main"               # merge/push a main → plan + apply prod
-      - "dev/**"             # push a ramas dev/** → plan + apply test"
+      - "main"               # merge a main → plan + apply prod
+      - "dev/**"             # push a ramas dev/** → plan + apply test
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Ambiente a desplegar (solo test)'
-        required: true
-        default: 'test'
-        # type: choice
-        # options:
-        #   - test
-        #   - prod
 
 permissions:
   id-token: write

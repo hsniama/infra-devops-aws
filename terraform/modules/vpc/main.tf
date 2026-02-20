@@ -6,14 +6,14 @@ resource "aws_vpc" "this" {
   enable_dns_support   = true //Activa soporte de DNS para que las instancias tengan nombres resolvibles.
 
   tags = {
-    Name = "${var.name_prefix}-vpc"
+    Name = "vpc-${var.name_prefix}"
   }
 }
 
 resource "aws_internet_gateway" "igw" { // permite que las subnets públicas tengan acceso a Internet.
   vpc_id = aws_vpc.this.id
   tags = {
-    Name = "${var.name_prefix}-igw"
+    Name = "igw-${var.name_prefix}"
   }
 }
 
@@ -25,7 +25,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true // Asigna automáticamente IPs públicas a las instancias lanzadas en estas subnets.
 
   tags = {
-    Name                                        = "${var.name_prefix}-public-${count.index}"
+    Name                                        = "subnet-public-${var.name_prefix}-${count.index}"
     "kubernetes.io/role/elb"                    = "1"      # Subnets públicas (para balanceadores accesibles desde Internet).
     "kubernetes.io/cluster/${var.cluster_name}" = "shared" # Tag para que EKS reconozca las subnets.
   }
@@ -34,7 +34,7 @@ resource "aws_subnet" "public" {
 resource "aws_route_table" "public" { // Crea una tabla de rutas para las subnets públicas.
   vpc_id = aws_vpc.this.id
   tags = {
-    Name = "${var.name_prefix}-rt-public"
+    Name = "rt-public-${var.name_prefix}"
   }
 }
 
@@ -60,7 +60,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.azs.names[count.index]
 
   tags = {
-    Name                                        = "${var.name_prefix}-private-${count.index}"
+    Name                                        = "subnet-private-${var.name_prefix}-${count.index}"
     "kubernetes.io/role/internal-elb"           = "1"      # Subnets privadas (para balanceadores internos).
     "kubernetes.io/cluster/${var.cluster_name}" = "shared" # Tag para que EKS reconozca las subnets.
   }
@@ -70,7 +70,7 @@ resource "aws_subnet" "private" {
 resource "aws_eip" "nat" {
   domain = "vpc"
   tags = {
-    Name = "${var.name_prefix}-eip-nat"
+    Name = "eip-nat-${var.name_prefix}"
   }
 }
 
@@ -82,7 +82,7 @@ resource "aws_nat_gateway" "nat" {
   depends_on = [aws_internet_gateway.igw]
 
   tags = {
-    Name = "${var.name_prefix}-nat"
+    Name = "nat-${var.name_prefix}"
   }
 }
 
@@ -91,7 +91,7 @@ resource "aws_route_table" "private" {
   vpc_id = aws_vpc.this.id
 
   tags = {
-    Name = "${var.name_prefix}-rt-private"
+    Name = "rt-private-${var.name_prefix}"
   }
 }
 
