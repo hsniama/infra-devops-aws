@@ -1,0 +1,55 @@
+flowchart LR
+  GH[GitHub Actions]
+  OIDC[IAM OIDC Provider<br/>token.actions.githubusercontent.com]
+  ROLE[IAM Role<br/>gh-oidc-terraform-infra-devops-aws]
+  STATE[S3 Backend<br/>tfstate-devops-henry-1720]
+  LOCKS[DynamoDB Lock Table<br/>tfstate-locks-devops]
+
+  GH -->|OIDC AssumeRole| ROLE
+  ROLE -->|terraform init/plan/apply| STATE
+  ROLE -->|state locking| LOCKS
+
+  subgraph AWS[AWS us-east-1]
+    subgraph TEST[Environment: TEST]
+      TVPC[VPC 10.110.0.0/16]
+      TPUB[Public Subnets<br/>10.110.10.0/24<br/>10.110.11.0/24]
+      TPRI[Private Subnets<br/>10.110.20.0/24<br/>10.110.21.0/24]
+      TIGW[Internet Gateway]
+      TNAT[NAT Gateway + EIP]
+      TEKS[EKS<br/>eksdevops1720test]
+      TNODES[Managed Node Group<br/>t3.medium x2..5]
+      TECR[ECR<br/>ecrdevops1720test]
+    end
+
+    subgraph PROD[Environment: PROD]
+      PVPC[VPC 10.111.0.0/16]
+      PPUB[Public Subnets<br/>10.111.10.0/24<br/>10.111.11.0/24]
+      PPRI[Private Subnets<br/>10.111.20.0/24<br/>10.111.21.0/24]
+      PIGW[Internet Gateway]
+      PNAT[NAT Gateway + EIP]
+      PEKS[EKS<br/>eksdevops1720prod]
+      PNODES[Managed Node Group<br/>t3.medium x2..5]
+      PECR[ECR<br/>ecrdevops1720prod]
+    end
+  end
+
+  ROLE --> TEST
+  ROLE --> PROD
+
+  TVPC --> TPUB
+  TVPC --> TPRI
+  TPUB --> TIGW
+  TPUB --> TNAT
+  TPRI --> TNAT
+  TPRI --> TEKS
+  TEKS --> TNODES
+  GH -. docker push .-> TECR
+
+  PVPC --> PPUB
+  PVPC --> PPRI
+  PPUB --> PIGW
+  PPUB --> PNAT
+  PPRI --> PNAT
+  PPRI --> PEKS
+  PEKS --> PNODES
+  GH -. docker push .-> PECR

@@ -112,6 +112,7 @@ flowchart LR
   PEKS --> PNODES
   GH -. docker push .-> PECR
 ```
+If you want more detail, go to assets/diagrams and you will find out the CI/CD, and Network Diagrams.
 
 ## 3. Componentes de Infraestructura en AWS
 

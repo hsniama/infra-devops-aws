@@ -1,0 +1,22 @@
+flowchart LR
+  DEV[Push dev/**]
+  MAIN[Merge main]
+  ENVTEST[GitHub Environment: test]
+  ENVPROD[GitHub Environment: prod<br/>required reviewers]
+  GH[GitHub Actions Workflow]
+  OIDC[GitHub OIDC Token]
+  PROVIDER[AWS IAM OIDC Provider]
+  ROLE[IAM Role<br/>gh-oidc-terraform-infra-devops-aws]
+  TF[Terraform init/plan/apply]
+  S3[S3 tfstate bucket]
+  DDB[DynamoDB lock table]
+  AWSINFRA[AWS Infra<br/>VPC + EKS + ECR]
+
+  DEV --> ENVTEST --> GH
+  MAIN --> ENVPROD --> GH
+  GH --> OIDC --> PROVIDER --> ROLE
+  GH --> TF
+  ROLE --> TF
+  TF --> S3
+  TF --> DDB
+  TF --> AWSINFRA

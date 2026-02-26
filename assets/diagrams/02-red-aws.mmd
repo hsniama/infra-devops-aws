@@ -1,0 +1,43 @@
+flowchart LR
+  subgraph AWS[AWS us-east-1]
+    subgraph TEST[TEST]
+      TVPC[VPC 10.110.0.0/16]
+      TPUB[Public Subnets<br/>10.110.10.0/24, 10.110.11.0/24]
+      TPRI[Private Subnets<br/>10.110.20.0/24, 10.110.21.0/24]
+      TIGW[IGW]
+      TNAT[NAT + EIP]
+      TEKS[EKS eksdevops1720test]
+      TNODES[Managed Nodes]
+      TECR[ECR ecrdevops1720test]
+
+      TVPC --> TPUB
+      TVPC --> TPRI
+      TPUB --> TIGW
+      TPUB --> TNAT
+      TPRI --> TNAT
+      TPRI --> TEKS
+      TEKS --> TNODES
+    end
+
+    subgraph PROD[PROD]
+      PVPC[VPC 10.111.0.0/16]
+      PPUB[Public Subnets<br/>10.111.10.0/24, 10.111.11.0/24]
+      PPRI[Private Subnets<br/>10.111.20.0/24, 10.111.21.0/24]
+      PIGW[IGW]
+      PNAT[NAT + EIP]
+      PEKS[EKS eksdevops1720prod]
+      PNODES[Managed Nodes]
+      PECR[ECR ecrdevops1720prod]
+
+      PVPC --> PPUB
+      PVPC --> PPRI
+      PPUB --> PIGW
+      PPUB --> PNAT
+      PPRI --> PNAT
+      PPRI --> PEKS
+      PEKS --> PNODES
+    end
+  end
+
+  TEKS -. pulls images .-> TECR
+  PEKS -. pulls images .-> PECR
