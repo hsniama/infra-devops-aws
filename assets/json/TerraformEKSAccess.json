@@ -6,7 +6,8 @@
             "Effect": "Allow",
             "Action": [
                 "eks:DescribeCluster",
-                "eks:ListClusters"
+                "eks:ListClusters",
+                "eks:ListAccessEntries"
             ],
             "Resource": "*"
         }

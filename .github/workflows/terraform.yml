@@ -146,3 +146,54 @@ jobs:
         with:
           name: terraform-apply-logs-${{ steps.env.outputs.env }}
           path: terraform/terraform.log
+
+  graph:
+    needs: plan
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Select env name
+        id: env
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            echo "env=prod" >> $GITHUB_OUTPUT
+          else
+            echo "env=test" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y graphviz
+
+      - name: Terraform init
+        run: terraform init -backend-config=../backends/${{ steps.env.outputs.env }}.hcl
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ steps.env.outputs.env }}
+          path: terraform
+
+      - name: Generate graph PNG
+        run: terraform graph -type=plan terraform/tfplan | dot -Tpng > terraform-graph.png
+
+      - name: Upload graph artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-graph-${{ steps.env.outputs.env }}
+          path: terraform/terraform-graph.png

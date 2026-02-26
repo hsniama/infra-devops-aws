@@ -1,10 +1,47 @@
 # Repo: infra-devops-aws (Terraform + GitHub Actions + AWS + OIDC)
 
-## Repositorio - `infra-devops-aws` 
+---
 
-Este repositorio aprovisiona la infraestructura requerida para cualquier aplicación o microservicio y contiene lo siguiente:
+Disponible en [Español](README.es.md)
 
-- Usuario IAM con Policies para deplesgar Infraestructura
+---
+
+## Table of Contents
+- [1. Project Overview](#1-project-overview)
+- [2. Architecture](#2-architecture)
+- [3. AWS Infrastructure Components](#3-aws-infrastructure-components)
+- [4. Project Structure](#4-project-structure)
+  - [4.1 Environments](#41-environments)
+- [5. Project Setup](#5-Project-Setup)
+- [6. CI/CD Pipeline Execution](#6-cicd-pipeline-execution)
+  - [6.1 Outputs and Artifacts](#61-outputs-and-artifacts)
+  - [6.2 Conexión al Cluster](#62-conexión-al-cluster)
+  - [6.3 Limpieza](#63-limpieza)
+- [7. Seguridad](#7-seguridad)
+- [8. Conclusión](#8-conclusión)
+- [9. Glosario y Conceptos Técnicos](#9-glosario-y-conceptos-técnicos)
+
+## 1. Project Overview
+Este repositorio no despliega aplicaciones directamente. Su objetivo es provisionar infraestructura base en AWS (EKS, ECR, VPC, OIDC) con separación de ambientes (test/prod) y entregar los outputs necesarios para que otros repositorios (ej. microservicios) puedan desplegarse de forma segura y automatizada.
+
+Al finalizar el pipeline (de acuerdo con el ambiente), se generan valores clave:
+
+- aws_region → región donde se desplegó la infraestructura.
+- ecr_repository_name → nombre del repositorio ECR.
+- ecr_repository_url → URL para hacer docker push.
+- eks_cluster_name → nombre del cluster EKS.
+- eks_cluster_endpoint → endpoint del API server para kubectl.
+- eks_oidc_issuer → issuer OIDC, útil para IRSA (roles para service accounts).
+
+Estos outputs deben ser consumidos por el pipeline de aplicaciones, permitiendo:
+
+- Construir y subir imágenes Docker al ECR.
+- Conectarse al cluster EKS con kubectl.
+- Configurar roles para service accounts vía OIDC.
+
+Por ende, este proyecto muestra cómo desplegar infraestructura moderna en AWS con Terraform y GitHub Actions, aplicando buenas prácticas de seguridad (OIDC, least privilege) y separación de ambientes (test/prod). Los servicios utilizados son:
+
+- Usuario IAM dedicado con least-privilege policies para desplegar los componentes de Infraestructura
 - VPCs personalizadas con Subnets públicas (Load Balancers) y privadas (EKS Nodes)
 - Nat Gateway con EIP y Route tables.
 - Amazon ECR (Elastic Container Registry)
@@ -14,32 +51,92 @@ Este repositorio aprovisiona la infraestructura requerida para cualquier aplicac
 - Estado remoto de Terraform en S3
 - Locking del estado con DynamoDB
 - CI/CD: GitHub Actions + OIDC
+- Dos ambientes separados: TEST y PROD con flujos distintos.
 
-## Infraestructura en AWS
+## 2. Arquitectura
+
+```mermaid
+flowchart LR
+  GH[GitHub Actions]
+  OIDC[IAM OIDC Provider<br/>token.actions.githubusercontent.com]
+  ROLE[IAM Role<br/>gh-oidc-terraform-infra-devops-aws]
+  STATE[S3 Backend<br/>tfstate-devops-henry-1720]
+  LOCKS[DynamoDB Lock Table<br/>tfstate-locks-devops]
+
+  GH -->|OIDC AssumeRole| ROLE
+  ROLE -->|terraform init/plan/apply| STATE
+  ROLE -->|state locking| LOCKS
+
+  subgraph AWS[AWS us-east-1]
+    subgraph TEST[Environment: TEST]
+      TVPC[VPC 10.110.0.0/16]
+      TPUB[Public Subnets<br/>10.110.10.0/24<br/>10.110.11.0/24]
+      TPRI[Private Subnets<br/>10.110.20.0/24<br/>10.110.21.0/24]
+      TIGW[Internet Gateway]
+      TNAT[NAT Gateway + EIP]
+      TEKS[EKS<br/>eksdevops1720test]
+      TNODES[Managed Node Group<br/>t3.medium x2..5]
+      TECR[ECR<br/>ecrdevops1720test]
+    end
+
+    subgraph PROD[Environment: PROD]
+      PVPC[VPC 10.111.0.0/16]
+      PPUB[Public Subnets<br/>10.111.10.0/24<br/>10.111.11.0/24]
+      PPRI[Private Subnets<br/>10.111.20.0/24<br/>10.111.21.0/24]
+      PIGW[Internet Gateway]
+      PNAT[NAT Gateway + EIP]
+      PEKS[EKS<br/>eksdevops1720prod]
+      PNODES[Managed Node Group<br/>t3.medium x2..5]
+      PECR[ECR<br/>ecrdevops1720prod]
+    end
+  end
+
+  ROLE --> TEST
+  ROLE --> PROD
+
+  TVPC --> TPUB
+  TVPC --> TPRI
+  TPUB --> TIGW
+  TPUB --> TNAT
+  TPRI --> TNAT
+  TPRI --> TEKS
+  TEKS --> TNODES
+  GH -. docker push .-> TECR
+
+  PVPC --> PPUB
+  PVPC --> PPRI
+  PPUB --> PIGW
+  PPUB --> PNAT
+  PPRI --> PNAT
+  PPRI --> PEKS
+  PEKS --> PNODES
+  GH -. docker push .-> PECR
+```
+
+## 3. Componentes de Infraestructura en AWS
 
 - **Región**: `us-east-1` 
 - **Backend remoto de Terraform**
-  - S3 para state: `tfstate-devops-henry-1720` 
-    ![S3 Bucket para state](./assets/img/7.png)
+  - S3 para state: `tfstate-devops-henry-1720`
     - keys (states separados por ambiente dentro del mismo backend)
-      - `dev/infra.tfstate`
+      - `test/infra.tfstate`
       - `prod/infra.tfstate`
   - DynamoDB para locking: `tfstate-locks-devops`
-    ![S3 Bucket para state](./assets/img/7.1.png)
+
 
 - **Infraestructura dev**:
-  - vpc_name: `devops-aws-test-vpc`
+  - vpc_name: `vpc-infra-aws-test`
     ![VPC subnets test](./assets/img/10.png)
     - Elastic Kubernetes Service (EKS): `eksdevops1720test`
       ![EKS Test](./assets/img/17.png)
-    - Elastic Container Registry (ECR): `devops-microservice-test`
+    - Elastic Container Registry (ECR): `ecrdevops1720test`
 
 - **Infraestructura prod**:
-  - vpc_name: `devops-aws-test-vpc`
+  - vpc_name: `vpc-infra-aws-prod`
     ![VPC subnets prod](./assets/img/11.png)
-    - Elastic Kubernetes Service (EKS): `eksdevops1720test`
+    - Elastic Kubernetes Service (EKS): `eksdevops1720prod`
       ![EKS Prod](./assets/img/16.png)
-    - Elastic Container Registry (ECR): `devops-microservice-test`
+    - Elastic Container Registry (ECR): `ecrdevops1720prod`
 
 En resumen:
 
@@ -48,56 +145,87 @@ En resumen:
   - Subnets
   - Route Tables
   - Internet Gateways
-- EKS Cluster por ambiente v1.32
+- EKS Cluster por ambiente v1.33
   ![EKS por ambiente](./assets/img/13.png)
 - ECR repositorios por ambiente para imagenes Docker
   ![Private Repositories](./assets/img/12.png)
 
-## Costos estimados 
-- **EKS Control Plane**: ~$0.10 por hora
-- **EC2 Nodes**: mínimo 2 nodos y dependen del tipo de instancia: `BOTTLEROCKET_x86_64` *(no tan económico)* 
-- **ECR**: bajo costo (almacenamiento por GB)
-- **S3 + DynamoDB**: mínimo costo
+## 4. Estructura del proyecto
 
-![Análisis de Costos](./assets/img/13.png)
+infra-devops-aws/
+├── .github/
+│   ├── workflows/
+│   │   ├── destroy-infra-prod.yml
+│   │   ├── destroy-infra-test.yml
+│   │   └── terraform.yml
+├── terraform/
+│   ├── modules/
+│   │   ├── vpc
+│   │   ├── eks
+│   │   └── ecr
+│   ├── backend.tf
+│   ├── locals.tf
+│   ├── main.tf
+│   ├── outputs.tf 
+│   ├── providers.tf
+│   ├── variables.tf
+│   └── versions.tf
+├── environments/
+│   ├── test.tfvars
+│   └── prod.tfvars
+├── backends/
+│   ├── test.hcl
+│   └── prod.hcl
+├── scripts/
+│   ├── bootstrap_backend.sh
+│   ├── bootstrap_oidc.sh
+│   ├── destroy_backend.sh
+│   └── destroy_oidc.sh
+└── README.md
 
-## Entornos
+- workflows/ → pipeline de despliegue y destrucción.
+- modules/ → módulos reutilizables (VPC, EKS, ECR).
+- environments/ → variables específicas por ambiente (test/prod).
+- backends/ → configuración del backend remoto (S3 + DynamoDB).
+- scripts/ → automatización de bootstrap inicial.
+
+### 4.1 Entornos
 
 Se tiene 2 entornos para este proyecto:
 
-- **DEV**: cualquier push a ramas `dev/**`: despliega en DEV, es decir, deploy automático sin aprobación manual.
+- **TEST**: cualquier push a ramas `dev/**`: despliega en DEV, es decir, deploy automático sin aprobación manual.
 - **PROD**: merge a `main` despliega en PROD y requiere aprobación manual en GitHub Environment.
 
 El estado remoto de Terraform usa llaves separadas pero mismo S3 Bucket:
 
-- `dev/infra.tfstate`
+- `test/infra.tfstate`
 
-    Actualizar imagen
-   ![Llave en DEV definida en el archivo backends/dev.hcl](./assets/img/7.png)
+   ![Llave en DEV definida en el archivo backends/dev.hcl](./assets/img/33.png) 
     Ir al archivo [backends/dev.hcl](./backends/dev.hcl)
 
 - `prod/infra.tfstate`
 
-    Actualizar imagen
-   ![Llave en PROD definida en el archivo backends/prod.hcl](./assets/img/8.png)
+   ![Llave en DEV definida en el archivo backends/dev.hcl](./assets/img/34.png) 
     Ir al archivo [backends/prod.hcl](./backends/prod.hcl)
 
-## Setup del proyecto
+## 5. Setup del proyecto
 
 **0. Clonar el repo:**
 ```bash
 git clone https://github.com/hsniama/infra-devops-aws
 cd infra-devops-aws
 ```
+---
+
 **1. Configurar AWS CLI**
 ```bash
 aws configure
 ```
 Se te pedirá ingresar los siguientes valores:
-- `AWS Access Key ID` → <tu clave>
-- `AWS Secret Access Key` → <tu clave secreta>
+- `AWS Access Key ID` → `<tu clave>`
+- `AWS Secret Access Key` → `<tu clave secreta>`
 - `Default region name` → us-east-1
-- `Default output son` → json
+- `Default output format` → json
 
 
 Verificar identidad:
@@ -107,9 +235,11 @@ aws sts get-caller-identity
 Nota Importante:
 
 1. Antes de configurar tu cuenta con `aws configure` y después validarla con `aws sts get-caller-identity`, primero debes/debías crear una nueva cuenta por el IAM de AWS y obtener el AccessKeyID y el SecretAccessKey.
-2. Una ves hallas creado tu cuenta/usuario en IAM y hayas terminado de configurararlo y validar su identidad, hay dos opciones muy importantes a considerar:
+2. Una ves hallaz creado tu cuenta/usuario en IAM y hayas terminado de configurararlo y validar su identidad, hay dos opciones muy importantes a considerar:
   a. **Usuario IAM con AdministratorAccess** *(Recomendado)*: Adjunta/Enlaza manualmente la política `AdministratorAccess` del tipo "AWS managed" al usuario recién creado en IAM para tener acceso total a servicios y recursos en AWS sin límite. 
   b. **Usuario IAM con Managed Policies**: Se adjunta políticas del tipo "customer managed" con permisos exactos para lo que se necesita en este proyecto reduciendo así el riesgo de dar permisos de más. Esta configuración personalizada se lo realiza en el siguiente archivo de [Configuración del Usuario](./assets/Readmes/ConfigUser.md).
+
+---
 
 **2. Crear Backend remoto (S3 + DynamoDB)**
 Ejecutar el script `bootstrap_backend.sh`:
@@ -124,15 +254,18 @@ Ejemplo:
 En donde <region> es la región de AWS en la cual estamos trabajando, <bucket_name> es el nombre completo del bucket a crear, y <dynamodb_table> es el nombre de la tabla de dynamodb.
 
 Este script crea:
-- S3 bucket para state
-- DynamoDB table para locking
+- S3 bucket para state: `tfstate-devops-henry-1720`
+  ![S3 Bucket para state](./assets/img/35.png)
+- DynamoDB table para locking: `tfstate-locks-devops`
+  ![Dynamo para state](./assets/img/7.1.png)
 - Keys para ambientes test y prod
-
-  ![Bucket Creado](./assets/img/7.png)
+  ![Keys por ambiente](./assets/img/7.png)
 
 Guardar los valores generados de *bucket*, *key*, *region*, y *dynamodb_table* y colocarlos en los archivos:
 - `backends/dev.hcl`
 - `backends/dev.hcl`
+
+---
 
 **3. Crear IAM Role para OIDC (GitHub Actions)**
 Ejecutar el script `bootstrap-oidc.sh`:
@@ -173,6 +306,8 @@ En conclusión, se tendrá el rol `gh-oidc-terraform-infra-devops-aws` con el po
 
 Para comprender la función de este script, dirigirse al [Anexo](./assets/Readmes/Anexos.md).
 
+---
+
 **4. Configuración de GitHub Environments**
 
 Se crea los environments en el repo > settings > Environments:
@@ -184,6 +319,8 @@ Se crea los environments en el repo > settings > Environments:
 En el caso del ambiente de `prod`, en *Required reviewers* me pongo a mi mismo:
 
 ![Required Reviewer](./assets/img/20.png)
+
+---
 
 **5. Crear Secrets y Variables en GitHub**
 
@@ -203,6 +340,8 @@ Ahora, se debe crear la siguiente variable en Actions > Variables:
 En mi caso:
 - `AWS_REGION` → us-east-1
 
+---
+
 **6. Setear variables de Terraform**
 
 Se debe especificar los valores de las siguientes variables que deben ser únicas a nivel global en AWS:
@@ -219,7 +358,7 @@ Para `PROD` modificar las variables en el archivo `enviroments/prod.tfvars`:
 
 Las demás variables como `node_instance_types`, `node_ami_type` así como el resto, son opcionales.
 
-## Ejecución del Pipeline
+## 6. Ejecución del Pipeline CI/CD
 
 **Workflow: terraform.yml**
 
@@ -264,7 +403,7 @@ Recuerda, que en el caso de correr en PROD, el pipeline se ejecuta pero necesita
 
 Para más detalles de como funciona este workflow y que contiene, dirígete al [Anexo](./assets/Readmes/Anexos.md).
 
-## Outputs y Artifacts
+### 6.1 Outputs y Artifacts
 
 Después de que el pipeline finalice correctamente, revisar el step:
 
@@ -272,12 +411,12 @@ Después de que el pipeline finalice correctamente, revisar el step:
 
 Valores obtenidos y necesarios:
 
-- aws_region
-- ecr_repository_name
-- ecr_repository_url
-- eks_cluster_name
-- eks_cluster_endpoint
-- eks_oidc_issuer
+- aws_region → región donde se desplegó la infraestructura.
+- ecr_repository_name → nombre del repositorio ECR.
+- ecr_repository_url → URL para hacer docker push.
+- eks_cluster_name → nombre del cluster EKS.
+- eks_cluster_endpoint → endpoint del API server para kubectl.
+- eks_oidc_issuer → issuer OIDC, útil para IRSA (roles para service accounts).
 
 ![Outputs](./assets/img/27.png)
 
@@ -287,28 +426,27 @@ Estos serán usados por el repo de microservicios para:
 - aws eks update-kubeconfig
 - kubectl apply
 
-Es decir, los outputs suficientes:
-
-- Cluster name y endpoint → para conectar kubectl.
-- ECR repo URL → para subir y referenciar imágenes.
-- OIDC issuer → útil si configuramos IRSA (roles para service accounts).
+Es decír, estas variables/outputs se usan en el repo de microservicios de la siguiente manera:
+- Build & Push: el microservicio construye la imagen Docker y la sube al ecr_repository_url.
+- Deploy: usa eks_cluster_name y eks_cluster_endpoint para conectarse con kubectl y aplicar manifests.
+- Auth: aprovecha eks_oidc_issuer si se configuran roles para service accounts (IRSA).
 
 También, al concluir la ejecución del pipeline, se obtienen los siguientes artifacts que GitHub Actions guarda como resultado de los jobs:
 - terraform-plan-logs-prod/test → Archivo de log (terraform.log) generado durante el plan. Sirve para depuración: si algo falla o quieres revisar qué recursos se iban a crear/modificar, puedes abrir este log.
-- terraform-apply-logs-prod/test → Archivo de log (terraform.log) generado durante el apply. Registra todo lo que Terraform hizo efectivamente en AWS. Es la evidencia del despligue.
+- terraform-apply-logs-prod/test → Archivo de log (terraform.log) generado durante el apply. Registra todo lo que Terraform hizo efectivamente en AWS. Es la evidencia del despliegue.
 - tfplan-prod/test → Contiene el plan exacto que generó Terraform (terraform plan). Se usa como input en el job apply para garantizar que se aplique exactamente lo que se revisó en el plan.
 
-![Artifacts](./assets/img/28).
+![Artifacts](./assets/img/28.png).
 
-## Conexión al Cluster
+### 6.2 Conexión al Cluster
 
 Una vez ejecutado correctamente el workflow *terraformn.yml*, ya es posible conectarse al cluster mediante el siguiente comando:
 ```bash
 aws eks update-kubeconfig --region <REGION> --name <CLUSTER_NAME>
 ```
 En donde:
-- <REGION> → es la regió que habías configurado al inicio.
-- <CLUSTER_NAME> → es el nombre del eks_name configurado en los archivos .tfvars
+- `<REGION>` → es la región que habías configurado al inicio.
+- `<CLUSTER_NAME>` → es el nombre del eks_name configurado en los archivos .tfvars
 
 Ejemplo:
 ```bash
@@ -316,6 +454,9 @@ aws eks update-kubeconfig --region us-east-1 --name eksdevops1720test
 
 kubectl get nodes
 ```
+
+![Resultados de comandos](./assets/img/31).
+
 El acceso está habilitado mediante EKS Access Entries en donde podemos listar todos los Access Entries configurados en nuestro cluster EKS con el siguiente comando:
 
 ```bash
@@ -323,6 +464,9 @@ aws eks list-access-entries --cluster-name <CLUSTER_NAME> --region <REGION>
 ```
 Nota:
 - Un Access Entry es el vínculo entre un principal de IAM (usuario o rol) y las políticas de acceso al cluster (ej. admin, readonly). El resultado te muestra cada ARN que tiene acceso al cluster y qué policies están asociadas. Es como decir: “Muéstrame todos los usuarios/roles que tienen permisos en este cluster”.
+
+![Resultados de comandos](./assets/img/32).
+
 
 Una vez ya conectados al cluster ya se puede construir y subir la imagen al ECR Repositorio usando el output *ECR Repo URL* del pipeline:
 
@@ -338,21 +482,33 @@ docker tag devops-microservice-test:latest \
 docker push <ECR_REPO_URL>/devops-microservice-test:latest
 ```
 En donde:
-- <ECR_REPO_URL> puede ser `035462531040.dkr.ecr.us-east-1.amazonaws.com`
+- `<ECR_REPO_URL>` puede ser `035462531040.dkr.ecr.us-east-1.amazonaws.com`
 
 También ya podríamos crear y exponer manifiestos y servicios de kubernetes para exponerlo dentro del cluster, etc., mediante otro pipeline en otro repositorio (repo de la aplicación).
 
-## Limpieza
+### 6.3 Limpieza
 Estos dos workflows sirven para hacer limpieza de la infraestructura.
 
-Si desea eliminar la infraestructura en `TEST`, ejecuto manualmente el workflow `destroy-infra-test.yml`.
-Si desea eliminar la infraestructura en `PROD`, ejecuto manualmente el workflow `destroy-infra-prod.yml`. Sin embargo, aquí requiero un *approval* del reviewer.
+Si desea eliminar la infraestructura en `TEST`, ejecuto manualmente el workflow `destroy-infra-test.yml` escogiendo la rama `Branch:dev/henry`.
+![Destroy test](./assets/img/29).
 
+Si desea eliminar la infraestructura en `PROD`, ejecuto manualmente el workflow `destroy-infra-prod.yml` escogiendo la rama `Branch:main`. Sin embargo, aquí requiero un *approval* del reviewer.
+![Destroy prod](./assets/img/30).
 
-## Conclusión
+## 7. Serguridad
+
+A continuación, se explica el detalle de seguridad en e siguiente apartado.
+
+[Clic Aquí](./assets/Readmes/Glossary.md).
+
+## 8. Conclusión
 En este proyecto:
 
 - No se necesita Access Keys en GitHub.
 - GitHub Actions obtiene credenciales temporales vía OIDC y permite que se autentique en AWS sin usar llaves estáticas.
 - Terraform puede desplegar infraestructura en AWS (de acuerdo a los requisítos de este proyecto) de forma segura y automatizada.
-- El usuario terraformUser (en mi caso) tiene permisos mínimos para crear el OIDC, sin ser administrador, gracias a las policy previamente añadidas.
+- El usuario terraformUser (en mi caso) tiene permisos mínimos (least privilege) para crear el OIDC, sin ser administrador, gracias a las policy previamente añadidas.
+
+## 9. Glosario y Conceptos Técnicos
+
+Para revisar lso conceptos técnicos y definiciones usadas en este proyecto, [clic aquí](./assets/Readmes/Glossary.md).
