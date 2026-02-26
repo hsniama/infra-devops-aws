@@ -6,9 +6,9 @@ vpc_cidr             = "10.111.0.0/16"
 public_subnet_cidrs  = ["10.111.10.0/24", "10.111.11.0/24"]
 private_subnet_cidrs = ["10.111.20.0/24", "10.111.21.0/24"]
 
-eks_name      = "eksdevops1720prod" // nombre del clúster EKS a tu elección. Es único a nivel global.
-cluster_version = "1.33" // versión de Kubernetes que correrá en EKS
-ecr_repo_name = "ecrdevops1720prod" // nombre del repositorio ECR a tu elección. Es único a nivel global.
+eks_name        = "eksdevops1720prod" // nombre del clúster EKS a tu elección. Es único a nivel global.
+cluster_version = "1.33"              // versión de Kubernetes que correrá en EKS
+ecr_repo_name   = "ecrdevops1720prod" // nombre del repositorio ECR a tu elección. Es único a nivel global.
 
 eks_access_entries = {
   terraform_user = {
