@@ -2,7 +2,11 @@
 
 ---
 
-## Índice de contenidos
+Available in [English](README.es.md)
+
+---
+
+## Table of Contents
 - [1. Descripción general del proyecto](#1-descripción-general-del-proyecto)
 - [2. Arquitectura](#2-arquitectura)
 - [3. Componentes de Infraestructura en AWS](#3-componentes-de-infraestructura-en-aws)
@@ -17,7 +21,7 @@
 - [8. Conclusión](#8-conclusión)
 - [9. Glosario y Conceptos Técnicos](#9-glosario-y-conceptos-técnicos)
 
-## 1. Descripción general del proyecto
+## 1. Project Overview
 Este repositorio no despliega aplicaciones directamente. Su objetivo es provisionar infraestructura base en AWS (EKS, ECR, VPC, OIDC) con separación de ambientes (test/prod) y entregar los outputs necesarios para que otros repositorios (ej. microservicios) puedan desplegarse de forma segura y automatizada.
 
 Al finalizar el pipeline (de acuerdo con el ambiente), se generan valores clave:
@@ -51,7 +55,69 @@ Por ende, este proyecto muestra cómo desplegar infraestructura moderna en AWS c
 
 ## 2. Arquitectura
 
-(aquí va el diagrama)
+```mermaid
+flowchart LR
+  GH[GitHub Actions]
+  OIDC[IAM OIDC Provider<br/>token.actions.githubusercontent.com]
+  ROLE[IAM Role<br/>gh-oidc-terraform-infra-devops-aws]
+  STATE[S3 Backend<br/>tfstate-devops-henry-1720]
+  LOCKS[DynamoDB Lock Table<br/>tfstate-locks-devops]
+
+  GH -->|OIDC AssumeRole| ROLE
+  ROLE -->|terraform init/plan/apply| STATE
+  ROLE -->|state locking| LOCKS
+
+  subgraph AWS[AWS us-east-1]
+    subgraph TEST[Environment: TEST]
+      TVPC[VPC 10.110.0.0/16]
+      TPUB[Public Subnets<br/>10.110.10.0/24<br/>10.110.11.0/24]
+      TPRI[Private Subnets<br/>10.110.20.0/24<br/>10.110.21.0/24]
+      TIGW[Internet Gateway]
+      TNAT[NAT Gateway + EIP]
+      TEKS[EKS<br/>eksdevops1720test]
+      TNODES[Managed Node Group<br/>t3.medium x2..5]
+      TECR[ECR<br/>ecrdevops1720test]
+    end
+
+    subgraph PROD[Environment: PROD]
+      PVPC[VPC 10.111.0.0/16]
+      PPUB[Public Subnets<br/>10.111.10.0/24<br/>10.111.11.0/24]
+      PPRI[Private Subnets<br/>10.111.20.0/24<br/>10.111.21.0/24]
+      PIGW[Internet Gateway]
+      PNAT[NAT Gateway + EIP]
+      PEKS[EKS<br/>eksdevops1720prod]
+      PNODES[Managed Node Group<br/>t3.medium x2..5]
+      PECR[ECR<br/>ecrdevops1720prod]
+    end
+  end
+
+  ROLE --> TEST
+  ROLE --> PROD
+
+  TVPC --> TPUB
+  TVPC --> TPRI
+  TPUB --> TIGW
+  TPUB --> TNAT
+  TPRI --> TNAT
+  TPRI --> TEKS
+  TEKS --> TNODES
+  GH -. docker push .-> TECR
+
+  PVPC --> PPUB
+  PVPC --> PPRI
+  PPUB --> PIGW
+  PPUB --> PNAT
+  PPRI --> PNAT
+  PPRI --> PEKS
+  PEKS --> PNODES
+  GH -. docker push .-> PECR
+```
+
+Una versión más clara de la arquitectura se muestra a continuación:
+
+  ![Architecture Diagram](./assets/diagrams/aws/aws_infrastructure_diagram.png)
+
+If you want more detail, go to `assets/diagrams` and you will find out the CI/CD, and Network Diagrams.
 
 ## 3. Componentes de Infraestructura en AWS
 
@@ -66,29 +132,29 @@ Por ende, este proyecto muestra cómo desplegar infraestructura moderna en AWS c
 
 - **Infraestructura dev**:
   - vpc_name: `vpc-infra-aws-test`
-    ![VPC subnets test](./img/10.png)
+    ![VPC subnets test](./assets/img/10.png)
     - Elastic Kubernetes Service (EKS): `eksdevops1720test`
-      ![EKS Test](./img/17.png)
+      ![EKS Test](./assets/img/17.png)
     - Elastic Container Registry (ECR): `ecrdevops1720test`
 
 - **Infraestructura prod**:
   - vpc_name: `vpc-infra-aws-prod`
-    ![VPC subnets prod](./img/11.png)
+    ![VPC subnets prod](./assets/img/11.png)
     - Elastic Kubernetes Service (EKS): `eksdevops1720prod`
-      ![EKS Prod](./img/16.png)
+      ![EKS Prod](./assets/img/16.png)
     - Elastic Container Registry (ECR): `ecrdevops1720prod`
 
 En resumen:
 
 - VPC dedicada por ambiente
-  ![VPCs](./img/9.png) 
+  ![VPCs](./assets/img/9.png) 
   - Subnets
   - Route Tables
   - Internet Gateways
 - EKS Cluster por ambiente v1.33
-  ![EKS por ambiente](./img/13.png)
+  ![EKS por ambiente](./assets/img/13.png)
 - ECR repositorios por ambiente para imagenes Docker
-  ![Private Repositories](./img/12.png)
+  ![Private Repositories](./assets/img/12.png)
 
 ## 4. Estructura del proyecto
 
@@ -140,12 +206,12 @@ El estado remoto de Terraform usa llaves separadas pero mismo S3 Bucket:
 
 - `test/infra.tfstate`
 
-   ![Llave en DEV definida en el archivo backends/dev.hcl](./img/33.png) 
+   ![Llave en DEV definida en el archivo backends/dev.hcl](./assets/img/33.png) 
     Ir al archivo [backends/dev.hcl](./backends/dev.hcl)
 
 - `prod/infra.tfstate`
 
-   ![Llave en DEV definida en el archivo backends/dev.hcl](./img/34.png) 
+   ![Llave en DEV definida en el archivo backends/dev.hcl](./assets/img/34.png) 
     Ir al archivo [backends/prod.hcl](./backends/prod.hcl)
 
 ## 5. Setup del proyecto
@@ -174,10 +240,13 @@ aws sts get-caller-identity
 ```
 Nota Importante:
 
-1. Antes de configurar tu cuenta con `aws configure` y después validarla con `aws sts get-caller-identity`, primero debes/debías crear una nueva cuenta por el IAM de AWS y obtener el AccessKeyID y el SecretAccessKey.
+1. Antes de configurar tu cuenta con `aws configure` y después validarla con `aws sts get-caller-identity`, primero debes crear una nueva cuenta por el IAM de AWS y obtener el AccessKeyID y el SecretAccessKey.
 2. Una ves hallaz creado tu cuenta/usuario en IAM y hayas terminado de configurararlo y validar su identidad, hay dos opciones muy importantes a considerar:
   a. **Usuario IAM con AdministratorAccess** *(Recomendado)*: Adjunta/Enlaza manualmente la política `AdministratorAccess` del tipo "AWS managed" al usuario recién creado en IAM para tener acceso total a servicios y recursos en AWS sin límite. 
-  b. **Usuario IAM con Managed Policies**: Se adjunta políticas del tipo "customer managed" con permisos exactos para lo que se necesita en este proyecto reduciendo así el riesgo de dar permisos de más. Esta configuración personalizada se lo realiza en el siguiente archivo de [Configuración del Usuario](./ConfigUser.md).
+
+  ![User with SuperAdmin provileges](./assets/img/36.png) 
+
+  b. **Usuario IAM con Managed Policies**: Se adjunta políticas del tipo "customer managed" con permisos exactos para lo que se necesita en este proyecto reduciendo así el riesgo de dar permisos de más. Esta configuración personalizada se lo realiza en el siguiente archivo de [Configuración del Usuario](./assets/Readmes/ConfigUser.md). Sin embargo, por tiempo y simplicidad, se recomienda seguir la opción A antes mencionada.
 
 ---
 
@@ -195,11 +264,11 @@ En donde <region> es la región de AWS en la cual estamos trabajando, <bucket_na
 
 Este script crea:
 - S3 bucket para state: `tfstate-devops-henry-1720`
-  ![S3 Bucket para state](./img/35.png)
+  ![S3 Bucket para state](./assets/img/35.png)
 - DynamoDB table para locking: `tfstate-locks-devops`
-  ![Dynamo para state](./img/7.1.png)
+  ![Dynamo para state](./assets/img/7.1.png)
 - Keys para ambientes test y prod
-  ![Keys por ambiente](./img/7.png)
+  ![Keys por ambiente](./assets/img/7.png)
 
 Guardar los valores generados de *bucket*, *key*, *region*, y *dynamodb_table* y colocarlos en los archivos:
 - `backends/dev.hcl`
@@ -242,9 +311,9 @@ Se debe guardar el ARN generado `AWS_ROLE_TO_ASSUME` como GitHub secret en tu re
 
 En conclusión, se tendrá el rol `gh-oidc-terraform-infra-devops-aws` con el policy `gh-oidc-terraform-infra-devops-aws-policy` enlazado.
 
-  ![Rol Creado](./img/8.png)
+  ![Rol Creado](./assets/img/8.png)
 
-Para comprender la función de este script, dirigirse al [Anexo](./Anexos.md).
+Para comprender la función de este script, dirigirse al [Anexo](./assets/Readmes/Anexos.md).
 
 ---
 
@@ -254,11 +323,11 @@ Se crea los environments en el repo > settings > Environments:
 - `dev` 
 - `prod`: Se activa el "Required reviewers" para que prod no aplique sin aprobación.
 
-![Configuración de los 2 Environments.](./img/19.png)
+![Configuración de los 2 Environments.](./assets/img/19.png)
 
 En el caso del ambiente de `prod`, en *Required reviewers* me pongo a mi mismo:
 
-![Required Reviewer](./img/20.png)
+![Required Reviewer](./assets/img/20.png)
 
 ---
 
@@ -266,7 +335,7 @@ En el caso del ambiente de `prod`, en *Required reviewers* me pongo a mi mismo:
 
 Crear el siguiente Secret (obtenido en la ejecución del script `bootstrap-oidc.sh`) con su respectivo valor en repo > settings > secrets & variables > actions > secrets:
 
-![Configuración de secrets](./img/21.png)
+![Configuración de secrets](./assets/img/21.png)
 
 En mi caso:
 - `AWS_ROLE_TO_ASSUME` → arn:aws:iam::03546XXXX:role/gh-oidc-terraform-infra-devops-aws
@@ -275,7 +344,7 @@ El workflow `terraform.yml` de GitHub Actions, usa este rol (AWS_ROLE_TO_ASSUME)
 
 Ahora, se debe crear la siguiente variable en Actions > Variables:
 
-![Configuración de secrets](./img/21.png)
+![Configuración de secrets](./assets/img/21.png)
 
 En mi caso:
 - `AWS_REGION` → us-east-1
@@ -292,9 +361,9 @@ Se debe especificar los valores de las siguientes variables que deben ser única
 - principal_arn del del role OIDC de GitHub Actions (Es el resultado de la ejecución del script `bootstrap-oidc.sh` en el paso 3 )
 
 Para `DEV` modificar las variables en el archivo `enviroments/dev.tfvars`:
-![Configuración de variables.](./img/23.png)
+![Configuración de variables.](./assets/img/23.png)
 Para `PROD` modificar las variables en el archivo `enviroments/prod.tfvars`:
-![Configuración de variables.](./img/24.png)
+![Configuración de variables.](./assets/img/24.png)
 
 Las demás variables como `node_instance_types`, `node_ami_type` así como el resto, son opcionales.
 
@@ -323,10 +392,12 @@ Para el ambiente de `PROD`:
 - Corre plan + apply en ambiente prod una vez se aprueba el merge en el PR.
 - Despliega la infraestructura real en producción.
 
+![Workflow Execution](./assets/diagrams/aws/cicd_pipeline.png)
+
 ---
 
 Nota:
-Con el fín de validar y analizar de forma breve nuestra infraestructura sin la necesidad de hacer cambios, commits, pushes, abrir y aprobar PRs, se agregó la facilidad de correr este workflow de forma manual (workflow_dispatch) para desplegar la infraestrctura tanto en el ambiente de `TEST` como `PROD` lo cual:
+Con el fín de validar y analizar de forma breve nuestra infraestructura sin la necesidad de hacer cambios, commits, pushes, abrir y aprobar PRs, se agregó la facilidad de correr este workflow de forma manual (`workflow_dispatch`) para desplegar la infraestrctura tanto en el ambiente de `TEST` como `PROD` lo cual:
 
 - Permite lanzar el workflow desde la interfaz de GitHub Actions.
 - Tiene un input environment con opciones test o prod para elegir el ambiente a desplegar.
@@ -334,14 +405,14 @@ Con el fín de validar y analizar de forma breve nuestra infraestructura sin la 
 
 Nos dirigimos a Actions > Workflows > terraform.yml > Run Workflow  y escoger la rama `Branch: dev/henry` para desplegar en `TEST` o la rama `Branch: main`  para desplegar en `PROD`. Finalmente, presionar en Run Workflow  y el pipeline se ejecutará.
 
-![Run Workflow](./img/25.png)
+![Run Workflow](./assets/img/25.png)
 
 Recuerda, que en el caso de correr en PROD, el pipeline se ejecuta pero necesita un *approval* del reviewer que fue configurado en el ambiente de prod en GitHub Environments.
 
-![Run Workflow with approve](./img/26.png)
+![Run Workflow with approve](./assets/img/26.png)
 
 
-Para más detalles de como funciona este workflow y que contiene, dirígete al [Anexo](./Readmes/Anexos.md).
+Para más detalles de como funciona exactamente este workflow y qué contiene, dirígete al [Anexo](./assets/Readmes/Anexos.md).
 
 ### 6.1 Outputs y Artifacts
 
@@ -358,7 +429,7 @@ Valores obtenidos y necesarios:
 - eks_cluster_endpoint → endpoint del API server para kubectl.
 - eks_oidc_issuer → issuer OIDC, útil para IRSA (roles para service accounts).
 
-![Outputs](./img/27.png)
+![Outputs](./assets/img/27.png)
 
 Estos serán usados por el repo de microservicios para:
 - docker build
@@ -376,7 +447,7 @@ También, al concluir la ejecución del pipeline, se obtienen los siguientes art
 - terraform-apply-logs-prod/test → Archivo de log (terraform.log) generado durante el apply. Registra todo lo que Terraform hizo efectivamente en AWS. Es la evidencia del despliegue.
 - tfplan-prod/test → Contiene el plan exacto que generó Terraform (terraform plan). Se usa como input en el job apply para garantizar que se aplique exactamente lo que se revisó en el plan.
 
-![Artifacts](./img/28.png).
+![Artifacts](./assets/img/28.png).
 
 ### 6.2 Conexión al Cluster
 
@@ -395,7 +466,7 @@ aws eks update-kubeconfig --region us-east-1 --name eksdevops1720test
 kubectl get nodes
 ```
 
-![Resultados de comandos](./img/31).
+![Resultados de comandos](./assets/img/31).
 
 El acceso está habilitado mediante EKS Access Entries en donde podemos listar todos los Access Entries configurados en nuestro cluster EKS con el siguiente comando:
 
@@ -405,7 +476,7 @@ aws eks list-access-entries --cluster-name <CLUSTER_NAME> --region <REGION>
 Nota:
 - Un Access Entry es el vínculo entre un principal de IAM (usuario o rol) y las políticas de acceso al cluster (ej. admin, readonly). El resultado te muestra cada ARN que tiene acceso al cluster y qué policies están asociadas. Es como decir: “Muéstrame todos los usuarios/roles que tienen permisos en este cluster”.
 
-![Resultados de comandos](./img/32).
+![Resultados de comandos](./assets/img/32).
 
 
 Una vez ya conectados al cluster ya se puede construir y subir la imagen al ECR Repositorio usando el output *ECR Repo URL* del pipeline:
@@ -430,16 +501,16 @@ También ya podríamos crear y exponer manifiestos y servicios de kubernetes par
 Estos dos workflows sirven para hacer limpieza de la infraestructura.
 
 Si desea eliminar la infraestructura en `TEST`, ejecuto manualmente el workflow `destroy-infra-test.yml` escogiendo la rama `Branch:dev/henry`.
-![Destroy test](./img/29).
+![Destroy test](./assets/img/29).
 
 Si desea eliminar la infraestructura en `PROD`, ejecuto manualmente el workflow `destroy-infra-prod.yml` escogiendo la rama `Branch:main`. Sin embargo, aquí requiero un *approval* del reviewer.
-![Destroy prod](./img/30).
+![Destroy prod](./assets/img/30).
 
 ## 7. Serguridad
 
 A continuación, se explica el detalle de seguridad en e siguiente apartado.
 
-[Clic Aquí](./Glossary.md).
+[Clic Aquí](./assets/Readmes/Security.md).
 
 ## 8. Conclusión
 En este proyecto:
@@ -451,4 +522,4 @@ En este proyecto:
 
 ## 9. Glosario y Conceptos Técnicos
 
-Para revisar lso conceptos técnicos y definiciones usadas en este proyecto, [clic aquí](./Glossary.md).
+Para revisar lso conceptos técnicos y definiciones usadas en este proyecto, [clic aquí](./assets/Readmes/Glossary.md).

@@ -14,3 +14,10 @@ for src in "$DIR"/*.mmd; do
   mmdc -i "$src" -o "${base}.png" -t neutral -b white -w 2200
   echo "Generated: ${base}.svg and ${base}.png"
 done
+
+# explains what the script does
+# This script renders Mermaid diagrams from .mmd files to .svg and .png formats.
+# It uses the Mermaid CLI tool (mmdc) to perform the rendering.
+# The script checks if mmdc is installed, and if not, it prompts the user
+# to install it. Then, it iterates over all .mmd files in the current directory,
+# rendering each one to both .svg and .png formats with specified themes and backgrounds.

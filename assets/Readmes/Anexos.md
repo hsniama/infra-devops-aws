@@ -4,22 +4,24 @@ Disponible en [Español](#anexos)
 
 ## Appendices
 
-#### 0. What does the `bootstrap_oidc.sh` script do?
+### 0. What does the `bootstrap_oidc.sh` script do?
 - Creates/validates the GitHub OIDC Provider (`token.actions.githubusercontent.com`).
 - Creates an IAM Role with a trust policy that allows only your repository (in my case: `hsniama/infra-devops-aws`) to assume it from GitHub Actions.
 
-    ![Role Created](./img/3.png)
+    ![Role Created](/assets/img/3.png)
 
 - Creates a permissions policy (e.g., `gh-oidc-terraform-infra-devops-aws-policy`) with access to:
     - **S3** (Terraform backend).
     - **DynamoDB** (Terraform lock).
     - **ECR, VPC, EC2, ELB, EKS, IAM, Autoscaling, Logs, KMS** (infrastructure).
 
-    ![Policy Created](./img/4.png)
+    ![Policy Created](/assets/img/4.png)
 
 - Attaches/Binds the policy to the role.
 
-    ![Policy attached](./img/5.png)
+    ![Policy attached](/assets/img/5.png)
+
+---
 
 ### 1. Explanation of the `gh-oidc-terraform-infra-devops-aws` role
 
@@ -39,7 +41,7 @@ We do NOT use it directly with the `terraformUser` (which is my IAM user). It is
 ```json
 AWS_ROLE_TO_ASSUME: arn:aws:iam::035462351040:role/gh-oidc-terraform-infra-devops-aws
 ```
-![Role in terraform.yml](./img/18)
+![Role in terraform.yml](/assets/img/18)
 
 2. GitHub generates an OIDC token when the pipeline runs.
 3. AWS validates that token against the OIDC provider you created.
@@ -52,7 +54,9 @@ AWS_ROLE_TO_ASSUME: arn:aws:iam::035462351040:role/gh-oidc-terraform-infra-devop
 - **Temporality**: Credentials last for minutes; they are not permanent keys.
 - **Fine-grained control**: Only your repository and specific branches can assume the role.
 
-### 3. Explanation of the `terraform.yml` workflow 
+---
+
+### 2. Explanation of the `terraform.yml` workflow 
 
 This pipeline distinguishes between testing and production environments. PRs against `main` generate a change plan in prod, merges to `main` apply changes in prod, pushes to `dev/**` branches apply in test, and it can also be executed manually by selecting the environment.
 
@@ -83,7 +87,9 @@ The pipeline has two main jobs:
 - **Push → dev/** → plan + apply in test (testing environment).
 - **Manual dispatch** → plan + apply in test or prod based on input.
 
-### 4. Security
+---
+
+### 3. Security
 
 **Currently:**
 - Public endpoint enabled (for testing only).
@@ -95,7 +101,9 @@ The pipeline has two main jobs:
 - Disable public endpoint.
 - Use AWS Load Balancer Controller + ACM for HTTPS.
 
-### 5. Differences compared to Azure Infrastructure
+---
+
+### 4. Differences compared to Azure Infrastructure
 
 The following table shows how the main components are mapped:
 
@@ -119,7 +127,9 @@ The following table shows how the main components are mapped:
 - **Blob Container ↔ S3 Key**: Blob containers vs. objects within a bucket.
 - **Azure Lock ↔ DynamoDB Lock**: Locking mechanisms to prevent conflicts in the Terraform state.
 
-## Estimated Costs 
+---
+
+### 5. Estimated Costs 
 - **EKS Control Plane**: ~$0.10 per hour.
 - **EC2 Nodes**: Minimum of 2 nodes, depending on the instance type: `BOTTLEROCKET_x86_64` *(not very economical)*.
 - **ECR**: Low cost (storage per GB).
@@ -127,103 +137,467 @@ The following table shows how the main components are mapped:
 
 ---
 
+### 6. CI/CD Pipeline Flow
+
+![CI/CD Pipeline](/assets/diagrams/aws/cicd_pipeline.png)
+
+#### Pipeline Triggers
+
+**TEST Environment (Automatic)**
+- Push to `dev/**` branches triggers automatic deployment
+- No manual approval required
+- Deploys to TEST infrastructure (10.110.0.0/16)
+
+**PROD Environment (Manual Approval)**
+- Pull Request to `main` → runs `terraform plan` only (review changes)
+- Merge to `main` → triggers deployment with required manual approval
+- Deploys to PROD infrastructure (10.111.0.0/16)
+
+#### Authentication Flow
+
+1. GitHub Actions workflow initiates
+2. OIDC provider authenticates with AWS
+3. Assumes IAM role `gh-oidc-terraform-infra-devops-aws`
+4. No static credentials needed (temporary credentials via OIDC)
+
+#### Terraform State Management
+
+- **Backend**: S3 bucket `tfstate-devops-henry-1720`
+- **Locking**: DynamoDB table `tfstate-locks-devops`
+- **State Keys**:
+  - TEST: `test/infra.tfstate`
+  - PROD: `prod/infra.tfstate`
+
+#### Deployment Process
+
+1. **Checkout** → Clone repository code
+2. **Init** → Initialize Terraform with remote backend
+3. **Plan** → Generate execution plan
+4. **Apply** → Deploy infrastructure (after approval for PROD)
+
+#### Infrastructure Deployed
+
+Each environment provisions:
+- VPC with public/private subnets across 2 AZs
+- Internet Gateway for public subnet connectivity
+- NAT Gateway with Elastic IP for private subnet internet access
+- EKS cluster v1.33 with managed node groups (t3.medium, 2-5 nodes)
+- ECR repository for Docker images
+
+#### Destroy Workflows
+
+- `destroy-infra-test.yml` → Manual trigger, no approval
+- `destroy-infra-prod.yml` → Manual trigger, requires approval
+
+---
+
+### 7. What is EKS Cluster?
+
+Amazon EKS (Elastic Kubernetes Service) is a managed Kubernetes service. In our infrastructure:
+
+- **Cluster Name**: eksdevops1720test (TEST) / eksdevops1720prod (PROD)
+- **Version**: 1.33
+- **Location**: Private subnets (10.110.20.0/24, 10.110.21.0/24 for TEST)
+
+**Two Main Components:**
+
+1. Control Plane (Managed by AWS)
+   - API Server - receives kubectl commands
+   - Scheduler - decides which node runs which pod
+   - Controller Manager - maintains desired state
+   - etcd - stores cluster configuration and state
+   - **You don't manage this** - AWS handles updates, patches, high availability
+
+2. Data Plane (Your Managed Node Group)
+   - EC2 instances (t3.medium, 2-5 nodes)
+   - Run in your private subnets
+   - Execute your containerized applications (pods)
+   - **You control** - instance type, scaling, AMI
+
+**Architecture Flow:**
+
+You (kubectl) 
+    ↓
+EKS API Server (Control Plane - AWS Managed)
+    ↓
+Scheduler assigns pod to node
+    ↓
+Node (EC2 in private subnet)
+    ↓
+Container Runtime pulls image from ECR
+    ↓
+Pod runs your application
+
+  ![EKS Architecture](/assets/diagrams/aws/eks_architecture_flow.png)
+
+**Key Processes:**
+
+1. Pod Scheduling:
+   - You run: kubectl apply -f deployment.yaml
+   - API Server receives request
+   - Scheduler finds available node with resources
+   - Kubelet (agent on node) starts the container
+
+2. Networking:
+   - Each pod gets its own IP address (AWS VPC CNI)
+   - Pods can communicate across nodes
+   - Services provide stable endpoints for pods
+
+3. Storage:
+   - Persistent volumes can use EBS, EFS
+   - Managed by Kubernetes storage classes
+
+**How to Operate It**
+
+1. Connect to Cluster
+
+```bash
+# Update kubeconfig (authenticates you)
+aws eks update-kubeconfig --region us-east-1 --name eksdevops1720test
+
+# Verify connection
+kubectl get nodes
+```
+
+What happens behind the scenes:
+- AWS CLI generates temporary credentials
+- Adds cluster endpoint to ~/.kube/config
+- Uses IAM authentication (your user has EKS Access Entry)
+
+**2. Deploy Applications**
+
+```bash
+# Create deployment
+kubectl create deployment nginx --image=nginx
+
+# Expose as service
+kubectl expose deployment nginx --port=80 --type=LoadBalancer
+
+# Check status
+kubectl get pods
+kubectl get services
+```
+
+**3. Manage Workloads**
+
+```bash
+# Scale deployment
+kubectl scale deployment nginx --replicas=5
+
+# Update image
+kubectl set image deployment/nginx nginx=nginx:1.21
+
+# View logs
+kubectl logs <pod-name>
+
+# Execute commands in pod
+kubectl exec -it <pod-name> -- /bin/bash
+```
+
+#### 4. Monitor Cluster
+
+```bash
+# Node status and resources
+kubectl top nodes
+
+# Pod resource usage
+kubectl top pods
+
+# Cluster events
+kubectl get events
+
+# Describe resources
+kubectl describe node <node-name>
+kubectl describe pod <pod-name>
+```
+
+#### How You Connect (Authentication)
+
+
+Our infrastructure uses EKS Access Entries (modern approach):
+
+#### Configured Principals:
+
+1. Your IAM User (terraformUser)
+   - Added via Terraform: principal_arn in tfvars
+   - Access policy: AmazonEKSClusterAdminPolicy
+   - Can run all kubectl commands
+
+2. GitHub Actions Role (gh-oidc-terraform-infra-devops-aws)
+   - Added for CI/CD automation
+   - Can deploy applications via pipeline
+
+#### Authentication Flow:
+
+kubectl command
+    ↓
+AWS CLI reads ~/.kube/config
+    ↓
+Calls AWS STS (get temporary token)
+    ↓
+Token sent to EKS API Server
+    ↓
+EKS checks Access Entry (is this IAM principal allowed?)
+    ↓
+Checks policy (what can they do?)
+    ↓
+Executes command if authorized
+
+
+Key Configuration (in your Terraform):
+hcl
+authentication_mode = "API_AND_CONFIG_MAP"
+
+This enables both:
+- Modern: Access Entries (IAM-based)
+- Legacy: ConfigMap (aws-auth)
+
+#### Interaction with Other AWS Resources
+
+#### 1. ECR (Elastic Container Registry)
+
+Purpose: Store Docker images
+
+Flow:
+Developer → docker push → ECR
+    ↓
+EKS Node pulls image from ECR
+    ↓
+Runs container in pod
+
+
+Authentication:
+- Nodes have IAM role with ECR permissions
+- Automatically authenticate to pull images
+
+Example:
+yaml
+**deployment.yaml**
+spec:
+  containers:
+  - name: app
+    image: 035462351040.dkr.ecr.us-east-1.amazonaws.com/ecrdevops1720test:latest
+
+
+#### 2. VPC (Networking)
+
+Subnets:
+- Nodes run in private subnets (security)
+- Pods get IPs from same subnet range (AWS VPC CNI)
+
+Security Groups:
+- Control traffic between nodes
+- Allow communication with control plane
+- Managed by EKS automatically
+
+Route Tables:
+- Private subnet → NAT Gateway → Internet (for pulling images, updates)
+- Public subnet → Internet Gateway (for load balancers)
+
+#### 3. IAM (Permissions)
+
+Node IAM Role (created by Terraform):
+- AmazonEKSWorkerNodePolicy - basic node operations
+- AmazonEKS_CNI_Policy - networking
+- AmazonEC2ContainerRegistryReadOnly - pull ECR images
+
+IRSA (IAM Roles for Service Accounts):
+- Pods can assume IAM roles
+- Uses OIDC provider (eks_oidc_issuer output)
+- Example: Pod needs S3 access
+
+```yaml
+service-account.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT:role/pod-s3-role
+
+
+### 4. Load Balancers (when you deploy services)
+
+Type: LoadBalancer:
+yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app
+spec:
+  type: LoadBalancer  # Creates AWS ELB/NLB
+  ports:
+  - port: 80
+```
+
+What happens:
+- Kubernetes creates AWS Load Balancer
+- Placed in public subnets
+- Routes traffic to pods in private subnets
+- DNS name provided for external access
+
+Type: Ingress (with AWS Load Balancer Controller):
+yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+spec:
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        backend:
+          service:
+            name: my-app
+
+
+Creates Application Load Balancer with advanced routing.
+
+#### 5. CloudWatch (Logging & Monitoring)
+
+Control Plane Logs (if enabled):
+- API server logs
+- Audit logs
+- Authenticator logs
+
+Container Logs:
+- Install Fluent Bit or CloudWatch agent
+- Streams pod logs to CloudWatch Logs
+
+Metrics:
+- Node CPU/memory
+- Pod resource usage
+- Cluster health
+
+#### 6. EBS (Storage)
+
+Persistent Volumes:
+yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: gp3  # EBS gp3 volume
+
+
+What happens:
+- EBS CSI driver creates EBS volume
+- Attaches to node
+- Mounts to pod
+- Data persists even if pod dies
+
+---
+
 ## Anexos
 
-#### 0. ¿Qué hace el script `bootstrap_oidc.sh`?
-- Crea/valida el OIDC Provider de GitHub (token.actions.githubusercontent.com).
-- Crea un rol IAM con trust policy que permite solo a tu repo (en mi caso: hsniama/infra-devops-aws) asumirlo desde GitHub Actions.
+### 0. ¿Qué hace el script `bootstrap_oidc.sh`?
+- Crea/valida el proveedor OIDC de GitHub (`token.actions.githubusercontent.com`).
+- Crea un IAM Role con una trust policy que permite que solo tu repositorio (en mi caso: `hsniama/infra-devops-aws`) lo asuma desde GitHub Actions.
 
-    ![Rol Creado](./img/3.png)
+    ![Rol creado](/assets/img/3.png)
 
-- Crea una policy de permisos (ej. gh-oidc-terraform-infra-devops-aws-policy) con acceso a:
-    - S3 (backend de Terraform).
-    - DynamoDB (lock de Terraform).
-    - ECR, VPC, EC2, ELB, EKS, IAM, Autoscaling, Logs, KMS (infraestructura).
+- Crea una policy de permisos (por ejemplo, `gh-oidc-terraform-infra-devops-aws-policy`) con acceso a:
+  - **S3** (backend de Terraform).
+  - **DynamoDB** (lock de Terraform).
+  - **ECR, VPC, EC2, ELB, EKS, IAM, Autoscaling, Logs, KMS** (infraestructura).
 
-    ![Policy Creada](./img/4.png)
+    ![Policy creada](/assets/img/4.png)
 
-- Adjunta/Enlaza la policy al rol.
+- Adjunta/vincula la policy al rol.
 
-    ![Policy attached](./img/5.png)
+    ![Policy adjunta](/assets/img/5.png)
 
-### 1. Explicación rol `gh-oidc-terraform-infra-devops-aws`
+---
 
-El rol `gh-oidc-terraform-infra-devops-aws`
-Es un IAM Role en nuestra cuenta AWS.
-Tiene dos cosas importantes:
-- Trust policy → define quién puede asumirlo. En nuestro caso:
-    - Solo el OIDC provider de GitHub (token.actions.githubusercontent.com).
-    - Solo nuestro repo (hsniama/infra-devops-aws) y ramas específicas (main, test/*, pull_request).
-- Permissions policy (`gh-oidc-terraform-infra-devops-aws-policy`) → define qué puede hacer una vez asumido.
-    - Crear VPCs, EC2, EKS, S3, DynamoDB, etc. (todo lo que Terraform necesita).
+### 1. Explicación del rol `gh-oidc-terraform-infra-devops-aws`
+
+El rol `gh-oidc-terraform-infra-devops-aws` es un IAM Role en nuestra cuenta de AWS. Tiene dos componentes críticos:
+- **Trust policy** → define quién puede asumirlo. En nuestro caso:
+  - Solo el proveedor OIDC de GitHub (`token.actions.githubusercontent.com`).
+  - Solo nuestro repositorio (`hsniama/infra-devops-aws`) y ramas específicas (`main`, `test/*`, `pull_request`).
+- **Permissions policy** (`gh-oidc-terraform-infra-devops-aws-policy`) → define qué puede hacer una vez asumido.
+  - Crear VPC, EC2, EKS, S3, DynamoDB, etc. (todo lo que Terraform necesita).
 
 **¿Quién usa este rol?**
-NO lo usamos nostros directamente con el usuario `terraformUser` (en mi caso, este es mi usuario IAM). Lo usa GitHub Actions cuando corre el  pipeline.
+No lo usamos directamente con `terraformUser` (que es mi usuario IAM). Lo usa GitHub Actions cuando se ejecuta el pipeline.
 
 **¿Cómo lo usa GitHub Actions?**
-1. En nuestro workflow `terraform.yml` de GitHub Actions, se configura el secreto:
+1. En el workflow `terraform.yml` de GitHub Actions, se configura el secret:
 
 ```json
 AWS_ROLE_TO_ASSUME: arn:aws:iam::035462351040:role/gh-oidc-terraform-infra-devops-aws
 ```
-  ![Rol en terraform.yml](./img/18).
+![Rol en terraform.yml](/assets/img/18)
 
-2. GitHub genera un token OIDC cuando se ejecuta el pipeline.
-3. AWS valida ese token contra el OIDC provider que creaste.
-4. Si el token corresponde a tu repo y rama permitida → AWS deja que GitHub asuma el rol.
+2. GitHub genera un token OIDC cuando corre el pipeline.
+3. AWS valida ese token contra el proveedor OIDC que creaste.
+4. Si el token coincide con tu repositorio y rama permitida → AWS permite asumir el rol.
 5. Al asumir el rol, GitHub obtiene credenciales temporales (STS) con los permisos de la policy.
 6. Terraform, dentro del pipeline, usa esas credenciales para desplegar infraestructura en AWS.
 
 **Ventajas de este modelo**
-**Seguridad**: no se necesita guardar AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY en GitHub.
-**Temporalidad**: las credenciales duran minutos, no son llaves permanentes.
-**Control fino**: solo tu repo y ramas específicas pueden asumir el rol.
+- **Seguridad**: No es necesario guardar `AWS_ACCESS_KEY_ID` ni `AWS_SECRET_ACCESS_KEY` en GitHub.
+- **Temporalidad**: Las credenciales duran minutos; no son llaves permanentes.
+- **Control fino**: Solo tu repositorio y ramas específicas pueden asumir el rol.
 
-### 3. Explicación del workflow `terraform.yml` 
+---
 
-Este pipeline diferencia entre ambientes de prueba y producción. Los PR contra main generan un plan de cambios en prod, los merges a main aplican en prod, los pushes a ramas dev/** aplican en test, y también se puede ejecutar manualmente seleccionando el ambiente.
+### 2. Explicación del workflow `terraform.yml`
+
+Este pipeline diferencia entre ambientes de testing y producción. Los PR hacia `main` generan un plan de cambios en prod, los merge a `main` aplican cambios en prod, los push a ramas `dev/**` aplican en test, y también puede ejecutarse manualmente eligiendo el ambiente.
 
 **Flujo de jobs**
 El pipeline tiene dos jobs principales:
 
-- Job plan
-  - Se ejecuta siempre (PR, push, manual).
-  - Determina el ambiente (prod o test) según la rama/evento.
-  - Corre terraform fmt, init, validate, y plan.
-  - Genera un archivo tfplan y logs que se suben como artifacts.
+- **Job plan**
+  - Siempre se ejecuta (PR, push, manual).
+  - Determina el ambiente (prod o test) según rama/evento.
+  - Ejecuta `terraform fmt`, `init`, `validate` y `plan`.
+  - Genera archivo `tfplan` y logs que se suben como artifacts.
 
-- Job apply
-  - Solo corre en push o workflow_dispatch (no en PR).
-  - Descarga el plan generado por el job anterior.
-  - Ejecuta terraform apply con ese plan exacto.
+- **Job apply**
+  - Solo se ejecuta en push o `workflow_dispatch` (no en PR).
+  - Descarga el plan generado en el job anterior.
+  - Ejecuta `terraform apply` con ese plan exacto.
   - Muestra outputs clave (ECR, EKS, etc.).
   - Sube logs como artifacts.
 
 **Seguridad y autenticación**
-- Usa OIDC con GitHub Actions para asumir un rol en AWS (AWS_ROLE_TO_ASSUME).
+- Usa OIDC con GitHub Actions para asumir un rol de AWS (`AWS_ROLE_TO_ASSUME`).
 - No requiere guardar Access Keys en GitHub.
 - Las credenciales son temporales y seguras.
 
 **Resumen de ejecución**
-- PR → main → plan en prod (revisión).
-- Push → main → plan + apply en prod (despliegue real).
-- Push → dev/ → plan + apply en test (entorno de pruebas).
-- Manual dispatch → plan + apply en test o prod según input.
+- **PR → main** → plan en prod (revisión).
+- **Push → main** → plan + apply en prod (despliegue real).
+- **Push → dev/** → plan + apply en test (entorno de pruebas).
+- **Manual dispatch** → plan + apply en test o prod según input.
 
-### 4. Seguridad
+---
 
-Actualmente:
-- Endpoint público habilitado (solo para pruebas)
-- Acceso controlado vía IAM
-- OIDC para GitHub Actions (sin secrets estáticos)
+### 3. Seguridad
 
-En producción se recomienda:
+**Actualmente:**
+- Endpoint público habilitado (solo para pruebas).
+- Acceso controlado vía IAM.
+- OIDC para GitHub Actions (sin secretos estáticos).
 
-- Restringir cluster_endpoint_public_access_cidrs
-- Deshabilitar endpoint público
-- Usar AWS Load Balancer Controller + ACM para HTTPS
+**Recomendado para Producción:**
+- Restringir `cluster_endpoint_public_access_cidrs`.
+- Deshabilitar endpoint público.
+- Usar AWS Load Balancer Controller + ACM para HTTPS.
 
-### 5. Diferencias respecto a una Infraestructura Azure
+---
+
+### 4. Diferencias respecto a Infraestructura en Azure
 
 La siguiente tabla muestra cómo se mapean los componentes principales:
 
@@ -237,18 +611,383 @@ La siguiente tabla muestra cómo se mapean los componentes principales:
 | Blob Container    | S3 Key           |
 | Azure Lock        | DynamoDB Lock    |
 
-Explicación:
+**Explicación:**
 
-- **AKS ↔ EKS**: Kubernetes administrado en Azure vs. AWS.  
-- **ACR ↔ ECR**: Registro de contenedores para imágenes Docker.  
-- **VNet ↔ VPC**: Redes virtuales para aislar y controlar tráfico.  
-- **Azure AD OIDC ↔ IAM OIDC**: Proveedores de identidad federada para autenticación.  
-- **Storage Account ↔ S3**: Almacenamiento de objetos.  
-- **Blob Container ↔ S3 Key**: Contenedores de blobs vs. objetos dentro de un bucket.  
-- **Azure Lock ↔ DynamoDB Lock**: Mecanismos de bloqueo para evitar conflictos en el estado de Terraform.  
+- **AKS ↔ EKS**: Kubernetes administrado en Azure vs AWS.
+- **ACR ↔ ECR**: Registry de contenedores para imágenes Docker.
+- **VNet ↔ VPC**: Redes virtuales para aislar y controlar tráfico.
+- **Azure AD OIDC ↔ IAM OIDC**: Proveedores de identidad federada para autenticación.
+- **Storage Account ↔ S3**: Almacenamiento de objetos.
+- **Blob Container ↔ S3 Key**: Contenedores Blob vs objetos dentro de un bucket.
+- **Azure Lock ↔ DynamoDB Lock**: Mecanismos de bloqueo para evitar conflictos en el state de Terraform.
 
-## Costos estimados 
-- **EKS Control Plane**: ~$0.10 por hora
-- **EC2 Nodes**: mínimo 2 nodos y dependen del tipo de instancia: `BOTTLEROCKET_x86_64` *(no tan económico)* 
-- **ECR**: bajo costo (almacenamiento por GB)
-- **S3 + DynamoDB**: mínimo costo
+---
+
+### 5. Costos estimados
+- **EKS Control Plane**: ~$0.10 por hora.
+- **Nodos EC2**: mínimo 2 nodos, depende del tipo de instancia: `BOTTLEROCKET_x86_64` *(no muy económico)*.
+- **ECR**: costo bajo (almacenamiento por GB).
+- **S3 + DynamoDB**: costo mínimo.
+
+---
+
+### 6. Flujo del pipeline CI/CD
+
+![Pipeline CI/CD](/assets/diagrams/aws/cicd_pipeline.png)
+
+#### Disparadores del pipeline
+
+**Ambiente TEST (Automático)**
+- Push a ramas `dev/**` dispara despliegue automático.
+- No requiere aprobación manual.
+- Despliega infraestructura TEST (10.110.0.0/16).
+
+**Ambiente PROD (Aprobación manual)**
+- Pull Request a `main` → ejecuta solo `terraform plan` (revisión de cambios).
+- Merge a `main` → dispara despliegue con aprobación manual requerida.
+- Despliega infraestructura PROD (10.111.0.0/16).
+
+#### Flujo de autenticación
+
+1. Se inicia el workflow de GitHub Actions.
+2. El proveedor OIDC autentica con AWS.
+3. Se asume el rol IAM `gh-oidc-terraform-infra-devops-aws`.
+4. No se necesitan credenciales estáticas (credenciales temporales vía OIDC).
+
+#### Gestión del estado de Terraform
+
+- **Backend**: bucket S3 `tfstate-devops-henry-1720`
+- **Locking**: tabla DynamoDB `tfstate-locks-devops`
+- **State Keys**:
+  - TEST: `test/infra.tfstate`
+  - PROD: `prod/infra.tfstate`
+
+#### Proceso de despliegue
+
+1. **Checkout** → clona el código del repositorio.
+2. **Init** → inicializa Terraform con backend remoto.
+3. **Plan** → genera plan de ejecución.
+4. **Apply** → despliega infraestructura (con aprobación en PROD).
+
+#### Infraestructura desplegada
+
+Cada ambiente provisiona:
+- VPC con subnets públicas/privadas en 2 AZ.
+- Internet Gateway para conectividad de subnets públicas.
+- NAT Gateway con Elastic IP para salida a internet de subnets privadas.
+- EKS v1.33 con managed node groups (`t3.medium`, 2-5 nodos).
+- Repositorio ECR para imágenes Docker.
+
+#### Workflows de destroy
+
+- `destroy-infra-test.yml` → trigger manual, sin aprobación.
+- `destroy-infra-prod.yml` → trigger manual, requiere aprobación.
+
+---
+
+### 7. ¿Qué es un clúster EKS?
+
+Amazon EKS (Elastic Kubernetes Service) es un servicio administrado de Kubernetes. En nuestra infraestructura:
+
+- **Nombre del clúster**: `eksdevops1720test` (TEST) / `eksdevops1720prod` (PROD)
+- **Versión**: 1.33
+- **Ubicación**: subnets privadas (`10.110.20.0/24`, `10.110.21.0/24` para TEST)
+
+**Dos componentes principales:**
+
+1. Control Plane (administrado por AWS)
+- API Server - recibe comandos `kubectl`
+- Scheduler - decide qué nodo ejecuta cada pod
+- Controller Manager - mantiene el estado deseado
+- etcd - almacena configuración y estado del clúster
+- **No lo administras tú** - AWS maneja updates, parches y alta disponibilidad
+
+2. Data Plane (tu Managed Node Group)
+- Instancias EC2 (`t3.medium`, 2-5 nodos)
+- Corren en subnets privadas
+- Ejecutan tus aplicaciones contenedorizadas (pods)
+- **Sí lo controlas tú** - tipo de instancia, escalado, AMI
+
+**Flujo de arquitectura:**
+
+Tú (`kubectl`)
+    ↓
+EKS API Server (Control Plane administrado por AWS)
+    ↓
+Scheduler asigna pod a un nodo
+    ↓
+Nodo (EC2 en subnet privada)
+    ↓
+Container Runtime descarga imagen desde ECR
+    ↓
+El pod ejecuta tu aplicación
+
+![Arquitectura EKS](/assets/diagrams/aws/eks_architecture_flow.png)
+
+**Procesos clave:**
+
+1. Programación de pods:
+- Ejecutas: `kubectl apply -f deployment.yaml`
+- API Server recibe la solicitud
+- Scheduler encuentra nodo disponible con recursos
+- Kubelet (agente en el nodo) inicia el contenedor
+
+2. Networking:
+- Cada pod obtiene su propia IP (AWS VPC CNI)
+- Los pods se comunican entre nodos
+- Los servicios proveen endpoints estables para los pods
+
+3. Almacenamiento:
+- Los volúmenes persistentes pueden usar EBS o EFS
+- Kubernetes los gestiona con StorageClasses
+
+**Cómo operarlo**
+
+1. Conectarse al clúster
+
+```bash
+# Actualiza kubeconfig (te autentica)
+aws eks update-kubeconfig --region us-east-1 --name eksdevops1720test
+
+# Verifica conexión
+kubectl get nodes
+```
+
+Qué sucede detrás:
+- AWS CLI genera credenciales temporales
+- Agrega endpoint del clúster a `~/.kube/config`
+- Usa autenticación IAM (tu usuario tiene EKS Access Entry)
+
+**2. Desplegar aplicaciones**
+
+```bash
+# Crea deployment
+kubectl create deployment nginx --image=nginx
+
+# Expone como servicio
+kubectl expose deployment nginx --port=80 --type=LoadBalancer
+
+# Revisa estado
+kubectl get pods
+kubectl get services
+```
+
+**3. Gestionar workloads**
+
+```bash
+# Escalar deployment
+kubectl scale deployment nginx --replicas=5
+
+# Actualizar imagen
+kubectl set image deployment/nginx nginx=nginx:1.21
+
+# Ver logs
+kubectl logs <pod-name>
+
+# Ejecutar comandos en pod
+kubectl exec -it <pod-name> -- /bin/bash
+```
+
+#### 4. Monitorear clúster
+
+```bash
+# Estado y recursos de nodos
+kubectl top nodes
+
+# Uso de recursos de pods
+kubectl top pods
+
+# Eventos del clúster
+kubectl get events
+
+# Describir recursos
+kubectl describe node <node-name>
+kubectl describe pod <pod-name>
+```
+
+#### Cómo te conectas (Autenticación)
+
+Nuestra infraestructura usa EKS Access Entries (enfoque moderno):
+
+#### Principales configurados:
+
+1. Tu usuario IAM (`terraformUser`)
+- Agregado vía Terraform: `principal_arn` en `tfvars`
+- Policy de acceso: `AmazonEKSClusterAdminPolicy`
+- Puede ejecutar todos los comandos de `kubectl`
+
+2. Rol de GitHub Actions (`gh-oidc-terraform-infra-devops-aws`)
+- Agregado para automatización CI/CD
+- Puede desplegar aplicaciones vía pipeline
+
+#### Flujo de autenticación:
+
+Comando `kubectl`
+    ↓
+AWS CLI lee `~/.kube/config`
+    ↓
+Llama a AWS STS (obtiene token temporal)
+    ↓
+Token enviado al EKS API Server
+    ↓
+EKS valida Access Entry (¿este principal IAM está permitido?)
+    ↓
+Valida policy (¿qué puede hacer?)
+    ↓
+Ejecuta comando si está autorizado
+
+Configuración clave (en Terraform):
+
+```hcl
+authentication_mode = "API_AND_CONFIG_MAP"
+```
+
+Esto habilita ambos:
+- Moderno: Access Entries (basado en IAM)
+- Legado: ConfigMap (`aws-auth`)
+
+#### Interacción con otros recursos de AWS
+
+#### 1. ECR (Elastic Container Registry)
+
+Propósito: almacenar imágenes Docker.
+
+Flujo:
+
+Developer → `docker push` → ECR
+    ↓
+Nodo EKS descarga imagen desde ECR
+    ↓
+Ejecuta contenedor en pod
+
+Autenticación:
+- Los nodos tienen IAM role con permisos para ECR.
+- Se autentican automáticamente para descargar imágenes.
+
+Ejemplo:
+
+```yaml
+# deployment.yaml
+spec:
+  containers:
+  - name: app
+    image: 035462351040.dkr.ecr.us-east-1.amazonaws.com/ecrdevops1720test:latest
+```
+
+#### 2. VPC (Networking)
+
+Subnets:
+- Los nodos corren en subnets privadas (seguridad).
+- Los pods obtienen IPs del mismo rango (AWS VPC CNI).
+
+Security Groups:
+- Controlan tráfico entre nodos.
+- Permiten comunicación con control plane.
+- EKS los maneja automáticamente.
+
+Route Tables:
+- Subnet privada → NAT Gateway → Internet (para descargar imágenes, updates).
+- Subnet pública → Internet Gateway (para load balancers).
+
+#### 3. IAM (Permisos)
+
+Node IAM Role (creado por Terraform):
+- `AmazonEKSWorkerNodePolicy` - operaciones básicas de nodo.
+- `AmazonEKS_CNI_Policy` - networking.
+- `AmazonEC2ContainerRegistryReadOnly` - pull de imágenes ECR.
+
+IRSA (IAM Roles for Service Accounts):
+- Los pods pueden asumir roles IAM.
+- Usa proveedor OIDC (`eks_oidc_issuer` output).
+- Ejemplo: un pod necesita acceso a S3.
+
+```yaml
+# service-account.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT:role/pod-s3-role
+```
+
+#### 4. Load Balancers (cuando despliegas servicios)
+
+Tipo: `LoadBalancer`
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app
+spec:
+  type: LoadBalancer  # Crea AWS ELB/NLB
+  ports:
+  - port: 80
+```
+
+Qué sucede:
+- Kubernetes crea un AWS Load Balancer.
+- Se ubica en subnets públicas.
+- Enruta tráfico a pods en subnets privadas.
+- Entrega un DNS para acceso externo.
+
+Tipo: `Ingress` (con AWS Load Balancer Controller)
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+spec:
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        backend:
+          service:
+            name: my-app
+```
+
+Crea un Application Load Balancer con enrutamiento avanzado.
+
+#### 5. CloudWatch (Logs y monitoreo)
+
+Logs del control plane (si está habilitado):
+- Logs del API server.
+- Logs de auditoría.
+- Logs del autenticador.
+
+Logs de contenedores:
+- Instalar Fluent Bit o agente de CloudWatch.
+- Envía logs de pods a CloudWatch Logs.
+
+Métricas:
+- CPU/memoria de nodos.
+- Uso de recursos en pods.
+- Salud del clúster.
+
+#### 6. EBS (Almacenamiento)
+
+Persistent Volumes:
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: gp3  # Volumen EBS gp3
+```
+
+Qué sucede:
+- El driver EBS CSI crea el volumen EBS.
+- Lo adjunta al nodo.
+- Lo monta en el pod.
+- Los datos persisten incluso si el pod muere.

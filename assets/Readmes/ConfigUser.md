@@ -22,7 +22,7 @@ Instead of using the root account or an administrator user, it is recommended to
 
 This user will be responsible for running the `bootstrap_oidc.sh` and `bootstrap_backend.sh` scripts for the automated creation of the remote backend and the OIDC Provider in AWS.
 
-## 2. Required Policies
+## 2. Required Customer Managed Policies
 
 The `terraformUser` requires specific permissions to create the remote backend, the OIDC Provider, and associated roles/policies. Below are the **four Customer Managed Policies** to be created and attached:
 
@@ -237,6 +237,19 @@ aws iam list-attached-user-policies --user-name terraformUser
 
 Result:
 ![Terraform User with 4 Policies](./img/2.png)
+
+## 4. Required AWS Managed Policies
+Finally, add the five AWS managed policies shown in the image below:
+
+- AmazonEC2FullAccess
+- AmazonEC2ReadOnlyAccess
+- AmazonS3FullAccess
+- AmazonVPCFullAccess
+- IAMReadOnlyAccess
+
+![Terraform User with 5 AWS Managed Policies](./img/37.png)
+
+These policies are already created and provided by IAM. The idea is to simplify the process of creating our own Customer Managed Policies for proper deployment and administration of our infrastructure. However, they can be modified and customized with a least‑privilege emphasis so that the user has only the necessary permissions.
 
 ---
 
@@ -475,3 +488,16 @@ aws iam list-attached-user-policies --user-name terraformUser
 
 Resultado:
 ![Usuario Terraform con 4 Policies](./img/2.png)
+
+## 4. Required AWS Managed Policies
+Finalmente, agregas las 5 AWS managed policies que observas en la imagen a continuación.
+
+- AmazonEC2FullAccess
+- AmazonEC2ReadOnlyAccess
+- AmazonS3FullAccess
+- AmazonVPCFullAccess
+- IAMReadOnlyAccess
+
+![Terraform User with 5 AWS Managed Policies](./img/37.png)
+
+Estas últimas policies están ya creadas y provienen de IAM. La idea es simplificar el proceso de crear nuestras propias Customer Managed Policies para el despliegue y administración correcto de nuestra infraestructura, sin emabrgo, se pueden modificar y personalizar con el énfasis de least-privilege para que el usuario tenga solo los permisos necesarios.

@@ -22,6 +22,9 @@ Security benefits:
 
 Only the specific GitHub repository is allowed to assume the IAM role (got it in `scripts/bootstrap_oidc.sh`).
 
+![OIDC flow diagram](/assets/diagrams/security/oidc_auth_sequence.png)
+
+
 ### 2️. Least Privilege IAM Policies
 
 The IAM role assumed by GitHub:
@@ -107,6 +110,10 @@ Esto significa:
 - No hay secretos en el repo
 - No hay rotación manual de credenciales
 - Las credenciales son temporales
+
+Solo el repositorio de GitHub tiene permitido asumir el IAM Role obtenido en `scripts/bootstrap_oidc.sh`.
+
+![OIDC flow diagram](/assets/diagrams/security/oidc_auth_sequence.png)
 
 ### 2. Autorización basada en IAM (Least Privilege)
 
