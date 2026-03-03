@@ -73,3 +73,4 @@ echo "DONE. Backend resources destroyed."
 # En mi caso:
 # ./scripts/destroy_backend.sh us-east-1 tfstate-devops-henry-1720 tfstate-locks-devops
 
+# Nota: Asegurarse que el usuario terraformUser (en mi caso) tenga permisos para eliminar buckets S3 y tablas DynamoDB en AWS.

@@ -195,3 +195,5 @@ echo "AWS_ROLE_TO_ASSUME = arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
 # scripts/bootstrap_oidc.sh <account_id> <repo_full_name> <role_name> <region>
 # En mi caso:
 # ./scripts/bootstrap_oidc.sh 035462351040 hsniama/infra-devops-aws gh-oidc-terraform-infra-devops-aws us-east-1
+
+# Nota: Asegurate de que el usuario/rol que ejecuta este script tenga permisos para crear roles, políticas IAM y OIDC providers.

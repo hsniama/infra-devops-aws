@@ -149,7 +149,7 @@ In summary:
   - Subnets
   - Route Tables
   - Internet Gateways
-- EKS cluster per environment v1.33
+- EKS cluster per environment v1.34
   ![EKS per environment](./assets/img/13.png)
 - ECR repositories per environment for Docker images
   ![Private Repositories](./assets/img/12.png)
@@ -240,17 +240,19 @@ aws sts get-caller-identity
 Important note:
 
 1. Before configuring your account with `aws configure` and validating it with `aws sts get-caller-identity`, you must first create a new IAM user in AWS and obtain the AccessKeyID and SecretAccessKey.
-2. Once you have created your IAM user and finished configuration and validation, there are two important options to consider:
-  a. **IAM user with AdministratorAccess** *(Recommended)*: manually attach the `AdministratorAccess` policy (AWS managed) to the new IAM user to have full access to AWS services and resources.
+2. Once you have created your IAM account or user, completed its configuration, and validated its identity, there are two key options to consider for granting CRUD permissions to the services and resources managed by Terraform:
+
+  a. **IAM user with AdministratorAccess** *(No Recommended)*: manually attach the `AdministratorAccess` policy (AWS managed) to the new IAM user to have full access to AWS services and resources.
 
     ![User with SuperAdmin provileges](./assets/img/36.png) 
 
-  b. **IAM user with Managed Policies**: attach customer-managed policies with exact permissions needed for this project, reducing the risk of over-permissioning. This custom setup is described here: [User Configuration](./assets/Readmes/ConfigUser.md). However, for the sake of time and simplicity, it is recommended to follow option A mentioned above.
+  b. **IAM user with Managed Policies** *(Recommended)*: attach customer-managed policies with exact permissions needed for this project, reducing the risk of over-permissioning. This custom setup is described here: [User Configuration](./assets/Readmes/ConfigUser.md). However, for the sake of time and simplicity, you could follow option A mentioned above.
 
+    ![Terraform User with 4 Policies](./img/2.png)
 ---
 
 **2. Create remote backend (S3 + DynamoDB)**
-Run script `bootstrap_backend.sh`:
+Once the policies mentioned in the previous section have been added, run the `bootstrap_backend.sh` script:
 ```bash
 chmod +x scripts/bootstrap_backend.sh
 scripts/bootstrap_backend.sh <region> <bucket_name> <dynamodb_table>
@@ -291,7 +293,7 @@ This script creates:
 
 - IAM role: `gh-oidc-terraform-infra-devops-aws`
 - Trust policy with GitHub OIDC
-- Sufficient permissions for:
+- Sufficient permissions for creating the following resources:
   - EKS
   - ECR
   - VPC
@@ -312,6 +314,13 @@ You must save the generated `AWS_ROLE_TO_ASSUME` ARN as a GitHub secret in your 
 In conclusion, you will have role `gh-oidc-terraform-infra-devops-aws` with policy `gh-oidc-terraform-infra-devops-aws-policy` attached.
 
 ![Created Role](./assets/img/8.png)
+
+Note:  
+GitHub Actions uses an IAM OIDC Role to deploy the infrastructure and:
+
+- Create resources such as VPC, EKS, ECR, and more.
+- Generate an Access Entry for the `terraformUser` (in my case), enabling it to manage the EKS cluster.
+
 
 To understand this script in detail, go to the [Appendix](./assets/Readmes/Anexos.md).
 

@@ -228,7 +228,9 @@ Container Runtime pulls image from ECR
     ↓
 Pod runs your application
 
-  ![EKS Architecture](/assets/diagrams/aws/eks_architecture_flow.png)
+  ![EKS Architecture 1](/assets/diagrams/aws/eks_architecture_flow.png)
+
+  ![EKS Architecture 2](/assets/diagrams/aws/eks_aws_traffic_flow.png)
 
 **Key Processes:**
 
@@ -722,7 +724,9 @@ Container Runtime descarga imagen desde ECR
     ↓
 El pod ejecuta tu aplicación
 
-![Arquitectura EKS](/assets/diagrams/aws/eks_architecture_flow.png)
+![EKS Architecture 1](/assets/diagrams/aws/eks_architecture_flow.png)
+
+![EKS Architecture 2](/assets/diagrams/aws/eks_aws_traffic_flow.png)
 
 **Procesos clave:**
 
