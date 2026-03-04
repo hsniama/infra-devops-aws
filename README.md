@@ -26,12 +26,23 @@ This repository does not deploy applications directly. Its goal is to provision 
 
 When the pipeline finishes (depending on the environment), key values are generated:
 
-- aws_region → region where the infrastructure was deployed.
-- ecr_repository_name → ECR repository name.
-- ecr_repository_url → URL for docker push.
-- eks_cluster_name → EKS cluster name.
-- eks_cluster_endpoint → API server endpoint for kubectl.
-- eks_oidc_issuer → OIDC issuer, useful for IRSA (roles for service accounts).
+| Output              | Descripción                                |
+|---------------------|--------------------------------------------|
+| aws_region          | region where infrastructure was deployed   |
+| ecr_repository_name | ECR repository name                        |
+| ecr_repository_url  | URL para `docker push`                     |
+| eks_cluster_name    | EKS cluster name                           |
+| eks_cluster_endpoint| API server endpoint for `kubectl`          |
+| eks_oidc_issuer     | OIDC issuer, useful for IRSA               |
+
+
+This project demonstrates how to build the foundational infrastructure that DevOps teams will use daily—without recreating it every time.
+
+**You build once. They deploy forever.**
+
+### The workflow:
+1. **Platform Engineer** (you): Fork this repo, deploy to your AWS account (~30 min)
+2. **DevOps Team** (them): Receive outputs (ECR_URL, EKS_ENDPOINT) and deploy apps
 
 These outputs must be consumed by the application pipeline, enabling it to:
 
@@ -156,6 +167,7 @@ In summary:
 
 ## 4. Project Structure
 
+```text
 infra-devops-aws/
 ├── .github/
 │   ├── workflows/
@@ -186,6 +198,7 @@ infra-devops-aws/
 │   ├── destroy_backend.sh
 │   └── destroy_oidc.sh
 └── README.md
+
 
 - workflows/ → deployment and destroy pipelines.
 - modules/ → reusable modules (VPC, EKS, ECR).
@@ -474,7 +487,7 @@ aws eks update-kubeconfig --region us-east-1 --name eksdevops1720test
 kubectl get nodes
 ```
 
-![Command results](./assets/img/31).
+![Command results](/assets/img/31.png).
 
 Access is enabled through EKS Access Entries. You can list all configured entries with:
 
@@ -485,7 +498,7 @@ aws eks list-access-entries --cluster-name <CLUSTER_NAME> --region <REGION>
 Note:
 - An Access Entry links an IAM principal (user or role) to cluster access policies (for example admin or readonly). The result shows each ARN with cluster access and associated policies.
 
-![Command results](./assets/img/32).
+![Command results](/assets/img/32.png).
 
 After connecting to the cluster, you can build and push the image to the ECR repository using the pipeline output *ECR Repo URL*:
 
@@ -510,10 +523,10 @@ You could also create and expose Kubernetes manifests and services in the cluste
 These two workflows are used to clean up infrastructure.
 
 If you want to delete `TEST` infrastructure, run workflow `destroy-infra-test.yml` manually selecting branch `Branch:dev/henry`.
-![Destroy test](./assets/img/29).
+![Destroy test](/assets/img/29.png).
 
 If you want to delete `PROD` infrastructure, run workflow `destroy-infra-prod.yml` manually selecting branch `Branch:main`. However, reviewer approval is required.
-![Destroy prod](./assets/img/30).
+![Destroy prod](/assets/img/30.png).
 
 ## 7. Security
 
@@ -532,3 +545,12 @@ In this project:
 ## 9. Glossary and Technical Concepts
 
 To review the technical concepts and definitions used in this project, [click here](./assets/Readmes/Glossary.md).
+
+## 10 Contact & Community
+
+For any questions: **henryniama@hotmail.com**
+
+⭐ Give this project a star on GitHub  
+🔄 Share it with your team  
+💬 Leave your feedback and comments  
+🤝 Contribute to the project

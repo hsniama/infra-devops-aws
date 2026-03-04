@@ -41,7 +41,7 @@ We do NOT use it directly with the `terraformUser` (which is my IAM user). It is
 ```json
 AWS_ROLE_TO_ASSUME: arn:aws:iam::035462351040:role/gh-oidc-terraform-infra-devops-aws
 ```
-![Role in terraform.yml](/assets/img/18)
+![Role in terraform.yml](/assets/img/18.png)
 
 2. GitHub generates an OIDC token when the pipeline runs.
 3. AWS validates that token against the OIDC provider you created.
@@ -498,6 +498,12 @@ What happens:
 
 ---
 
+In the .gitognore file we have the following:
+
+  ![Gitignore](/assets/img/ignore.png)
+
+---
+
 ## Anexos
 
 ### 0. ¿Qué hace el script `bootstrap_oidc.sh`?
@@ -537,7 +543,7 @@ No lo usamos directamente con `terraformUser` (que es mi usuario IAM). Lo usa Gi
 ```json
 AWS_ROLE_TO_ASSUME: arn:aws:iam::035462351040:role/gh-oidc-terraform-infra-devops-aws
 ```
-![Rol en terraform.yml](/assets/img/18)
+![Rol en terraform.yml](/assets/img/18.png)
 
 2. GitHub genera un token OIDC cuando corre el pipeline.
 3. AWS valida ese token contra el proveedor OIDC que creaste.
@@ -995,3 +1001,9 @@ Qué sucede:
 - Lo adjunta al nodo.
 - Lo monta en el pod.
 - Los datos persisten incluso si el pod muere.
+
+---
+
+En el archivo .gitognore tenemos lo siguiente:
+
+  ![Gitignore](/assets/img/ignore.png)

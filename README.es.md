@@ -26,12 +26,23 @@ Este repositorio no despliega aplicaciones directamente. Su objetivo es provisio
 
 Al finalizar el pipeline (de acuerdo con el ambiente), se generan valores clave:
 
-- aws_region → región donde se desplegó la infraestructura.
-- ecr_repository_name → nombre del repositorio ECR.
-- ecr_repository_url → URL para hacer docker push.
-- eks_cluster_name → nombre del cluster EKS.
-- eks_cluster_endpoint → endpoint del API server para kubectl.
-- eks_oidc_issuer → issuer OIDC, útil para IRSA (roles para service accounts).
+| Output              | Descripción                                |
+|---------------------|--------------------------------------------|
+| aws_region          | Región donde se desplegó la infraestructura |
+| ecr_repository_name | Nombre del repositorio ECR                  |
+| ecr_repository_url  | URL para `docker push`                      |
+| eks_cluster_name    | Nombre del clúster EKS                      |
+| eks_cluster_endpoint| Endpoint del API server para `kubectl`      |
+| eks_oidc_issuer     | Issuer OIDC, útil para IRSA                 |
+
+Este proyecto demuestra cómo construir la infraestructura base 
+que los equipos DevOps usarán a diario — sin tener que recrearla cada vez.
+
+**La construyes una vez. Ellos despliegan para siempre.**
+
+### Flujo de trabajo:
+1. **Platform Engineer** (tú): haz fork de este repositorio y despliega en tu cuenta de AWS (~30 min)
+2. **DevOps Team** (ellos): reciben los outputs (ECR_URL, EKS_ENDPOINT) y despliegan aplicaciones
 
 Estos outputs deben ser consumidos por el pipeline de aplicaciones, permitiendo:
 
@@ -47,7 +58,7 @@ Por ende, este proyecto muestra cómo desplegar infraestructura moderna en AWS c
 - Amazon ECR (Elastic Container Registry)
 - Amazon EKS (Elastic Kubernetes Service) con Managed Node Group
 - IAM Role para GitHub Actions (OIDC)
-- Acceso al cluster vía EKS Access Entries habilitado con authentication_mode = "API_AND_CONFIG_MAP"
+- Acceso al cluster vía EKS Access Entries habilitado con `authentication_mode` = `"API_AND_CONFIG_MAP"`
 - Estado remoto de Terraform en S3
 - Locking del estado con DynamoDB
 - CI/CD: GitHub Actions + OIDC
@@ -156,8 +167,9 @@ En resumen:
 - ECR repositorios por ambiente para imagenes Docker
   ![Private Repositories](./assets/img/12.png)
 
-## 4. Estructura del proyecto
+## 4. Estructura del Proyecto
 
+```text
 infra-devops-aws/
 ├── .github/
 │   ├── workflows/
@@ -172,7 +184,7 @@ infra-devops-aws/
 │   ├── backend.tf
 │   ├── locals.tf
 │   ├── main.tf
-│   ├── outputs.tf 
+│   ├── outputs.tf
 │   ├── providers.tf
 │   ├── variables.tf
 │   └── versions.tf
@@ -188,6 +200,7 @@ infra-devops-aws/
 │   ├── destroy_backend.sh
 │   └── destroy_oidc.sh
 └── README.md
+
 
 - workflows/ → pipeline de despliegue y destrucción.
 - modules/ → módulos reutilizables (VPC, EKS, ECR).
@@ -456,7 +469,7 @@ También, al concluir la ejecución del pipeline, se obtienen los siguientes art
 - terraform-apply-logs-prod/test → Archivo de log (terraform.log) generado durante el apply. Registra todo lo que Terraform hizo efectivamente en AWS. Es la evidencia del despliegue.
 - tfplan-prod/test → Contiene el plan exacto que generó Terraform (terraform plan). Se usa como input en el job apply para garantizar que se aplique exactamente lo que se revisó en el plan.
 
-![Artifacts](./assets/img/28.png).
+![Artifacts](/assets/img/28.png).
 
 ### 6.2 Conexión al Cluster
 
@@ -475,7 +488,7 @@ aws eks update-kubeconfig --region us-east-1 --name eksdevops1720test
 kubectl get nodes
 ```
 
-![Resultados de comandos](./assets/img/31).
+![Resultados de comandos](/assets/img/31.png).
 
 El acceso está habilitado mediante EKS Access Entries en donde podemos listar todos los Access Entries configurados en nuestro cluster EKS con el siguiente comando:
 
@@ -485,7 +498,7 @@ aws eks list-access-entries --cluster-name <CLUSTER_NAME> --region <REGION>
 Nota:
 - Un Access Entry es el vínculo entre un principal de IAM (usuario o rol) y las políticas de acceso al cluster (ej. admin, readonly). El resultado te muestra cada ARN que tiene acceso al cluster y qué policies están asociadas. Es como decir: “Muéstrame todos los usuarios/roles que tienen permisos en este cluster”.
 
-![Resultados de comandos](./assets/img/32).
+![Resultados de comandos](/assets/img/32.png).
 
 
 Una vez ya conectados al cluster ya se puede construir y subir la imagen al ECR Repositorio usando el output *ECR Repo URL* del pipeline:
@@ -510,10 +523,10 @@ También ya podríamos crear y exponer manifiestos y servicios de kubernetes par
 Estos dos workflows sirven para hacer limpieza de la infraestructura.
 
 Si desea eliminar la infraestructura en `TEST`, ejecuto manualmente el workflow `destroy-infra-test.yml` escogiendo la rama `Branch:dev/henry`.
-![Destroy test](./assets/img/29).
+![Destroy test](/assets/img/29.png).
 
 Si desea eliminar la infraestructura en `PROD`, ejecuto manualmente el workflow `destroy-infra-prod.yml` escogiendo la rama `Branch:main`. Sin embargo, aquí requiero un *approval* del reviewer.
-![Destroy prod](./assets/img/30).
+![Destroy prod](/assets/img/30.png).
 
 ## 7. Serguridad
 
@@ -532,3 +545,12 @@ En este proyecto:
 ## 9. Glosario y Conceptos Técnicos
 
 Para revisar lso conceptos técnicos y definiciones usadas en este proyecto, [clic aquí](./assets/Readmes/Glossary.md).
+
+## 10. Contacto
+
+Cualquier consulta: **henryniama@hotmail.com**
+
+⭐ Dale estrella en GitHub
+🔄 Comparte con tu equipo
+💬 Déjame tus comentarios
+🤝 Contribuye al proyecto
