@@ -160,7 +160,7 @@ In summary:
   - Subnets
   - Route Tables
   - Internet Gateways
-- EKS cluster per environment v1.34
+- EKS cluster per environment v1.35
   ![EKS per environment](./assets/img/13.png)
 - ECR repositories per environment for Docker images
   ![Private Repositories](./assets/img/12.png)

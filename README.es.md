@@ -162,7 +162,7 @@ En resumen:
   - Subnets
   - Route Tables
   - Internet Gateways
-- EKS Cluster por ambiente v1.34
+- EKS Cluster por ambiente v1.35
   ![EKS por ambiente](./assets/img/13.png)
 - ECR repositorios por ambiente para imagenes Docker
   ![Private Repositories](./assets/img/12.png)
