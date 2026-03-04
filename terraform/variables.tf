@@ -31,6 +31,10 @@ variable "eks_name" {
   type = string
 }
 
+variable "cluster_version" {
+  type = string
+}
+
 variable "node_instance_types" {
   type = list(string)
 }

@@ -51,3 +51,5 @@ echo "DONE."
 # scripts/destroy_oidc.sh <account_id> <role_name> <policy_name>
 # En mi caso:
 # ./scripts/destroy_oidc.sh 035462351040 gh-oidc-terraform-infra-devops-aws gh-oidc-terraform-infra-devops-aws-policy
+
+#Nota: Asegurarse que el usuario terraformUser (en mi caso) tenga permisos para eliminar roles, políticas y proveedores OIDC en AWS IAM.

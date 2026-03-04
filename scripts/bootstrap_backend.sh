@@ -75,3 +75,5 @@ fi
 # scripts/bootstrap_backend.sh <region> <bucket_name> <dynamodb_table>
 # En mi caso:
 # ./scripts/bootstrap_backend.sh us-east-1 tfstate-devops-henry-1720 tfstate-locks-devops
+
+# Nota: Asegurate de que el usuario/rol que ejecuta este script tenga permisos para crear buckets, tablas y políticas IAM.

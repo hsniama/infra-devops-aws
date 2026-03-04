@@ -6,8 +6,9 @@ vpc_cidr             = "10.110.0.0/16"
 public_subnet_cidrs  = ["10.110.10.0/24", "10.110.11.0/24"]
 private_subnet_cidrs = ["10.110.20.0/24", "10.110.21.0/24"]
 
-eks_name      = "eksdevops1720test" // nombre del clúster EKS a tu elección. Es único a nivel global.
-ecr_repo_name = "ecrdevops1720test" // nombre del repositorio ECR a tu elección. Es único a nivel global.
+eks_name        = "eksdevops1720test" // nombre del clúster EKS a tu elección. Es único a nivel global.
+cluster_version = "1.34"              // versión de Kubernetes que correrá en EKS
+ecr_repo_name   = "ecrdevops1720test" // nombre del repositorio ECR a tu elección. Es único a nivel global.
 
 eks_access_entries = {
   terraform_user = {
@@ -15,10 +16,6 @@ eks_access_entries = {
     policies = {
       admin = {
         policy_arn        = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-        access_scope_type = "cluster"
-      }
-      readonly = {
-        policy_arn        = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy"
         access_scope_type = "cluster"
       }
     }

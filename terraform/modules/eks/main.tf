@@ -3,14 +3,14 @@ module "eks" {
   version = "~> 20.0"
 
   cluster_name    = var.eks_name
-  cluster_version = "1.32" // versión de Kubernetes que correrá en EKS
+  cluster_version = var.cluster_version // versión de Kubernetes que correrá en EKS
 
   vpc_id     = var.vpc_id             //  ID de la VPC donde se desplegará el clúster.
   subnet_ids = var.private_subnet_ids // lista de subnets privadas donde se ubicarán los nodos del clúster.
 
   #Para poder usar kubectl desde fuera (nuestra laptop / GitHub runners si hace falta)
-  cluster_endpoint_public_access  = true
-  cluster_endpoint_private_access = true
+  cluster_endpoint_public_access  = true // Permite que el endpoint del clúster EKS sea accesible desde Internet (útil para pruebas y administración con kubectl desde fuera de AWS).
+  cluster_endpoint_private_access = true // Permite que el endpoint del clúster EKS sea accesible desde dentro de la VPC (recomendado para producción, ya que es más seguro al no exponer el endpoint a Internet).
 
   // ---------------------------------------------------------
   # De aquí en adelante, configuramos la autorización para acceder al clúster EKS con nuestro usuario IAM o grupo.

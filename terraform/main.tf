@@ -22,6 +22,7 @@ module "eks" {
 
   name_prefix         = local.name_prefix
   eks_name            = var.eks_name
+  cluster_version     = var.cluster_version
   vpc_id              = module.vpc.vpc_id
   private_subnet_ids  = module.vpc.private_subnet_ids
   node_instance_types = var.node_instance_types

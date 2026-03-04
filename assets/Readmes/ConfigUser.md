@@ -1,37 +1,33 @@
-# infra-devops-aws
-
-# Configuración de políticas personalizadas para usuario de Terraform
+Disponible en [Español](#objetivos)
 
 ---
 
-## Objetivos
-- Crear un usuario IAM dedicado (no administrador) para que pueda ejecutar los scripts de bootstrap.
-- Asignar las políticas mínimas necesarias para que el usuario pueda crear:
-  - El OIDC Provider de GitHub.
-  - El rol IAM federado con permisos para Terraform.
-  - Adminsitrar el EKS Cluster.
+# Custom Policy Configuration for Terraform User
 
----
+## Objectives
+- Create a dedicated (non-administrator) IAM user to execute bootstrap scripts.
+- Assign the minimum necessary permissions for the user to create:
+  - The GitHub OIDC Provider.
+  - The federated IAM role with Terraform permissions.
+  - Administer the EKS Cluster.
 
-## 1. Crear un usuario IAM dedicado
-En lugar de usar la cuenta root o un usuario administrador, se recomienda crear un usuario específico para automatización, por ejemplo:
+## 1. Create a Dedicated IAM User
+Instead of using the root account or an administrator user, it is recommended to create a specific user for automation, for example:
 
-- Nombre: `terraformUser`
-- Acceso: **solo programático** (Access Key + Secret Key).
-- Sin acceso a la consola.
+- **Name**: `terraformUser`
+- **Access**: **Programmatic access only** (Access Key + Secret Key).
+- **Console Access**: Disabled.
 
-![Usuario Terraform](./assets/img/1.png)
+![Terraform User](./img/1.png)
 
-Este usuario podrá ejecutar los scripts de `bootstrap_oidc.sh` y `bootstrap_backend.sh` para la creación automatizada del backend remoto y el OIDC Provider en AWS.
+This user will be responsible for running the `bootstrap_oidc.sh` and `bootstrap_backend.sh` scripts for the automated creation of the remote backend and the OIDC Provider in AWS.
 
----
+## 2. Required Customer Managed Policies
 
-## 2. Políticas necesarias
-
-El usuario `terraformUser` necesita permisos específicos para poder crear el backend remoto, OIDC Provider y los roles y policies asociados. A continuación, se detallan las **cuatro políticas de tipo customer managed** a ser creadas y enlazadas:
+The `terraformUser` requires specific permissions to create the remote backend, the OIDC Provider, and associated roles/policies. Below are the **four Customer Managed Policies** to be created and attached:
 
 ### 2.1 Policy: `OpenIDConnectProviderAccess`
-Permite crear y administrar el OIDC Provider de GitHub.
+Allows the creation and management of the GitHub OIDC Provider. This policy is required only during the initial setup in order to create the OIDC provider. Once the provider has been created, the policy can be detached from the user.
 
 ```json
 {
@@ -50,7 +46,260 @@ Permite crear y administrar el OIDC Provider de GitHub.
 }
 ```
 ### 2.2 Policy: `ManageRolesIAM`
-Permite crear y administrar roles y policies IAM necesarias para el pipeline.
+Allows the creation and management of IAM roles and policies required for the automation pipeline. This policy is required only during the initial setup in order to create the OIDC Role. Once the rol has been created, the policy can be detached from the user.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+				"iam:CreateRole",
+				"iam:GetRole",
+				"iam:UpdateAssumeRolePolicy",
+				"iam:AttachRolePolicy",
+				"iam:CreatePolicy",
+				"iam:GetPolicy",
+				"iam:CreatePolicyVersion",
+				"iam:ListPolicyVersions",
+				"iam:DetachRolePolicy",
+				"iam:DeletePolicyVersion",
+				"iam:DeletePolicy",
+        "iam:DeleteRole"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+### 2.3 Policy: `TerraformBackendAccess`
+This policy combines the minimum permissions required for Terraform to utilize an S3 bucket as a remote backend and a DynamoDB table for state locking. 
+
+Note: This policy is useful only when executing Terraform commands locally in a development environment. In production, the GitHub Actions workflow is used instead.
+
+The policy is structured into 3 blocks:
+- **Block 1 (Bucket)** → Permissions for the bucket itself (listing, versioning, encryption, and public access block).
+- **Block 2 (Objects)** → Permissions for the objects stored within the bucket (read, write, and delete).
+- **Block 3 (DynamoDB)** → Permissions to create, describe, delete, and use the lock table.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "TerraformStateS3Bucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+        "s3:GetBucketVersioning",
+        "s3:PutBucketVersioning",
+        "s3:GetEncryptionConfiguration",
+        "s3:PutEncryptionConfiguration",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:PutBucketPublicAccessBlock"
+      ],
+      "Resource": "arn:aws:s3:::tfstate-devops-henry-1720"
+    },
+    {
+      "Sid": "TerraformStateS3Objects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::<BUCKET_NAME>/*"
+    },
+    {
+      "Sid": "TerraformLockDynamoDB",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:CreateTable",
+        "dynamodb:DescribeTable",
+        "dynamodb:DeleteTable",
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:UpdateItem"
+      ],
+      "Resource": "arn:aws:dynamodb:<REGION>:<ACCOUNT_ID>:table/<TABLE_NAME>"
+    }
+  ]
+}
+```
+
+#### How to use this Policy?
+Replace the placeholders in your `.json` file:
+- `<BUCKET_NAME>` → The name of your S3 bucket used for the state.
+- `<REGION>` → The AWS region where the DynamoDB table is located.
+- `<ACCOUNT_ID>` → Your AWS account ID.
+- `<TABLE_NAME>` → The name of the DynamoDB table used for state locking.
+
+In my specific case, the policy is configured as follows:
+
+```bash
+"Resource": "arn:aws:s3:::tfstate-devops-henry-1720/*"
+"Resource": "arn:aws:dynamodb:us-east-1:035462351040:table/tfstate-locks-devops"
+```
+
+### 2.4 Policy: `TerraformEKSAccess`
+This policy provides the following capabilities:
+- **eks:ListClusters** → The user can list all EKS clusters within the account.
+- **eks:DescribeCluster** → The user can retrieve specific cluster details (endpoint, OIDC issuer, configuration, etc.).
+
+Note: This policy is always required for daily use, as it allows us to connect to the EKS cluster through kubectl. Keep in mind that this policy is needed only for establishing the connection, not for managing the cluster itself. Cluster management requires the EKS entry permissions defined in the EKS module, which are already specified.
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "EKSClusterAccess",
+            "Effect": "Allow",
+            "Action": [
+                "eks:DescribeCluster",
+                "eks:ListClusters",
+                "eks:ListAccessEntries"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+
+**Note:** This policy does NOT grant permissions to manage Kubernetes resources such as pods, deployments, or services. That level of access is handled by **Kubernetes RBAC** (e.g., `system:masters`); for more details, refer to the `main.tf` file in the EKS module.
+
+## 3. Execution: Policy Creation and Attachment
+
+Navigate to the `assets/json/` directory where the four policy files are located:
+
+```bash
+cd assets/json
+```
+Run the following commands to create each of the policies:
+
+**OpenIDConnectProviderAccess** Policy:
+```bash
+aws iam create-policy \
+  --policy-name OpenIDConnectProviderAccess \
+  --policy-document file://OpenIDConnectProviderAccess.json
+```
+
+**ManageRolesIAM** Policy:
+```bash
+aws iam create-policy \
+  --policy-name ManageRolesIAM \
+  --policy-document file://ManageRolesIAM.json
+```
+
+**TerraformBackendAccess** Policy:
+```bash
+aws iam create-policy \
+  --policy-name TerraformBackendAccess \
+  --policy-document file://TerraformBackendAccess.json
+```
+**TerraformEKSAccess** Policy:
+```bash
+aws iam create-policy \
+  --policy-name TerraformEKSAccess \
+  --policy-document file://TerraformEKSAccess.json
+```
+
+Now, execute the following command to attach each of the policies to the user:
+
+```bash
+aws iam attach-user-policy \
+  --user-name terraformUser \
+  --policy-arn arn:aws:iam::<ACCOUNT_ID>:policy/<POLICY_NAME>
+```
+Remember that you must replace the following parameters:
+
+- `<ACCOUNT_ID>` → Your 12-digit AWS account ID (e.g., 03546235XXXX)
+- `<POLICY_NAME>` → The name of each created policy (e.g. TerraformEKSAccess)
+
+Example:
+
+```bash
+aws iam attach-user-policy \
+  --user-name terraformUser \
+  --policy-arn arn:aws:iam::03546235XXXX:policy/OpenIDConnectProviderAccess
+```
+You must execute this command four times, as there are four distinct policies.
+
+Finally, verify that the policies are properly attached. Run the following command to list the policies associated with your user:
+
+```bash
+aws iam list-attached-user-policies --user-name <USER_NAME> 
+```
+Example:
+```bash
+aws iam list-attached-user-policies --user-name terraformUser
+```
+
+Result:
+![Terraform User with 4 Policies](./img/2.png)
+
+
+To conclude:
+
+ManageRolesIAM.json              → Only for initial setup (create OIDC Role)
+OpenIDConnectProviderAccess.json → Only for initial setup (create OIDC Provider)
+TerraformBackendAccess.json      → Only if running Terraform locally for development
+TerraformEKSAccess.json          → Always required (for kubectl access)
+
+
+
+---
+
+# Configuración de políticas personalizadas para usuario de Terraform
+
+## Objetivos
+- Crear un usuario IAM dedicado (no administrador) para que pueda ejecutar los scripts de bootstrap.
+- Asignar las políticas mínimas necesarias para que el usuario pueda crear:
+  - El OIDC Provider de GitHub.
+  - El rol IAM federado con permisos para Terraform.
+  - Adminsitrar el EKS Cluster.
+
+
+## 1. Crear un usuario IAM dedicado
+En lugar de usar la cuenta root o un usuario administrador, se recomienda crear un usuario específico para automatización, por ejemplo:
+
+- Nombre: `terraformUser`
+- Acceso: **solo programático** (Access Key + Secret Key).
+- Sin acceso a la consola.
+
+![Usuario Terraform](./img/1.png)
+
+Este usuario podrá ejecutar los scripts de `bootstrap_oidc.sh` y `bootstrap_backend.sh` para la creación automatizada del backend remoto y el OIDC Provider en AWS.
+
+## 2. Políticas necesarias
+
+El usuario `terraformUser` necesita permisos específicos para poder crear el backend remoto, OIDC Provider y los roles y policies asociados. A continuación, se detallan las **cuatro políticas de tipo customer managed** a ser creadas y enlazadas:
+
+### 2.1 Policy: `OpenIDConnectProviderAccess`
+Permite crear y administrar el OIDC Provider de GitHub. Esta política solo es necesaria durante la configuración inicial para crear el proveedor OIDC. Una vez creado el proveedor, la política puede desvincularse del usuario.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateOpenIDConnectProvider",
+        "iam:GetOpenIDConnectProvider",
+        "iam:DeleteOpenIDConnectProvider"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+### 2.2 Policy: `ManageRolesIAM`
+Permite crear y administrar roles y policies IAM necesarias para el pipeline. Esta política solo es necesaria durante la configuración inicial para crear el rol OIDC. Una vez creado el rol, la política puede desvincularse del usuario.
 
 ```json
 {
@@ -79,6 +328,8 @@ Permite crear y administrar roles y policies IAM necesarias para el pipeline.
 ```
 ### 2.3 Policy: `TerraformBackendAccess`
 Esta es una Policy que combina los permisos mínimos necesarios para que Terraform pueda usar un bucket S3 como backend y una tabla DynamoDB para locks.
+
+Nota: Esta política solo es útil al ejecutar comandos de Terraform localmente en un entorno de desarrollo. En producción, se utiliza el flujo de trabajo de GitHub Actions.
 
 La policy esta divida en 3 bloques:
 - **Bloque 1 (Bucket)** → permisos sobre el bucket en sí (listar, versioning, encryption, public access block).
@@ -130,8 +381,8 @@ La policy esta divida en 3 bloques:
     }
   ]
 }
-
 ```
+
 #### ¿Cómo usar esta Policy?
 Sustituye en el archivo .json:
 
@@ -153,6 +404,8 @@ Esta policy hace lo siguiente:
 - **eks:ListClusters** → el usuario puede listar todos los clusters EKS en la cuenta.
 - **eks:DescribeCluster** → el usuario puede obtener los detalles de un cluster específico (endpoint, OIDC issuer, configuración, etc.).
 
+Nota: Esta política siempre es necesaria para el uso diario, ya que nos permite conectarnos al clúster EKS mediante kubectl. Ten en cuenta que esta política solo es necesaria para establecer la conexión, no para administrar el clúster. La administración del clúster requiere los permisos de entrada EKS definidos en el módulo EKS, que ya están especificados.
+
 ```json
 {
     "Version": "2012-10-17",
@@ -162,7 +415,8 @@ Esta policy hace lo siguiente:
             "Effect": "Allow",
             "Action": [
                 "eks:DescribeCluster",
-                "eks:ListClusters"
+                "eks:ListClusters",
+                "eks:ListAccessEntries"
             ],
             "Resource": "*"
         }
@@ -171,7 +425,7 @@ Esta policy hace lo siguiente:
 ```
 Ojo: No da permisos para crear pods, deployments, services, etc. → eso lo maneja Kubernetes RBAC (ej. system:masters), ver el modulo eks el archivo main.tf.
 
-## 2.1 Ejecución, creación y enlace de políticas
+## 3 Ejecución, creación y enlace de políticas
 Ingresa al archivo assets/json/ donde yacen los 4 archivos (políticas):
 
 ```bash
@@ -215,8 +469,8 @@ aws iam attach-user-policy \
 ```
 Recuerda que debes reemplazar los siguientes parámetros:
 
-- <ACCOUNT_ID> → 03546235XXXX (Este es el ID de tu usuario creado en IAM)
-- <POLICY_NAME> → TerraformEKSAccess (es el nombre de cada una de las políticas)
+- `<ACCOUNT_ID>` → 03546235XXXX (Este es el ID de tu usuario creado en IAM)
+- `<POLICY_NAME>` → TerraformEKSAccess (es el nombre de cada una de las políticas)
 
 Ejemplo:
 
@@ -238,4 +492,11 @@ aws iam list-attached-user-policies --user-name terraformUser
 ```
 
 Resultado:
-![Usuario Terraform con 4 Policies](./assets/img/2.png)
+![Usuario Terraform con 4 Policies](./img/2.png)
+
+Para concluir:
+
+- `ManageRolesIAM.json`               → SOLO setup inicial (crear OIDC Role)
+- `OpenIDConnectProviderAccess.json`  → SOLO setup inicial (crear OIDC Provider)
+- `TerraformBackendAccess.json`       → SOLO si ejecutas Terraform localmente para desarrollo.
+- `TerraformEKSAccess.json`           → SIEMPRE (para kubectl)

@@ -1,156 +1,312 @@
 # Repo: infra-devops-aws (Terraform + GitHub Actions + AWS + OIDC)
 
-## Repositorio - `infra-devops-aws` 
+---
 
-Este repositorio aprovisiona la infraestructura requerida para cualquier aplicación o microservicio y contiene lo siguiente:
+Disponible en [Español](README.es.md)
 
-- Usuario IAM con Policies para deplesgar Infraestructura
-- VPCs personalizadas con Subnets públicas (Load Balancers) y privadas (EKS Nodes)
-- Nat Gateway con EIP y Route tables.
-- Amazon ECR (Elastic Container Registry)
-- Amazon EKS (Elastic Kubernetes Service) con Managed Node Group
-- IAM Role para GitHub Actions (OIDC)
-- Acceso al cluster vía EKS Access Entries habilitado con authentication_mode = "API_AND_CONFIG_MAP"
-- Estado remoto de Terraform en S3
-- Locking del estado con DynamoDB
-- CI/CD: GitHub Actions + OIDC
+---
 
-## Infraestructura en AWS
+## Table of Contents
+- [1. Project Overview](#1-project-overview)
+- [2. Architecture](#2-architecture)
+- [3. AWS Infrastructure Components](#3-aws-infrastructure-components)
+- [4. Project Structure](#4-project-structure)
+  - [4.1 Environments](#41-environments)
+- [5. Project Setup](#5-project-setup)
+- [6. CI/CD Pipeline Execution](#6-cicd-pipeline-execution)
+  - [6.1 Outputs and Artifacts](#61-outputs-and-artifacts)
+  - [6.2 Cluster Connection](#62-cluster-connection)
+  - [6.3 Cleanup](#63-cleanup)
+- [7. Security](#7-security)
+- [8. Conclusion](#8-conclusion)
+- [9. Glossary and Technical Concepts](#9-glossary-and-technical-concepts)
 
-- **Región**: `us-east-1` 
-- **Backend remoto de Terraform**
-  - S3 para state: `tfstate-devops-henry-1720` 
-    ![S3 Bucket para state](./assets/img/7.png)
-    - keys (states separados por ambiente dentro del mismo backend)
-      - `dev/infra.tfstate`
+## 1. Project Overview
+This repository does not deploy applications directly. Its goal is to provision foundational infrastructure in AWS (EKS, ECR, VPC, OIDC) with environment separation (test/prod) and deliver the required outputs so other repositories (for example, microservices) can deploy securely and automatically.
+
+When the pipeline finishes (depending on the environment), key values are generated:
+
+| Output              | Descripción                                |
+|---------------------|--------------------------------------------|
+| aws_region          | region where infrastructure was deployed   |
+| ecr_repository_name | ECR repository name                        |
+| ecr_repository_url  | URL para `docker push`                     |
+| eks_cluster_name    | EKS cluster name                           |
+| eks_cluster_endpoint| API server endpoint for `kubectl`          |
+| eks_oidc_issuer     | OIDC issuer, useful for IRSA               |
+
+
+This project demonstrates how to build the foundational infrastructure that DevOps teams will use daily—without recreating it every time.
+
+**You build once. They deploy forever.**
+
+### The workflow:
+1. **Platform Engineer** (you): Fork this repo, deploy to your AWS account (~30 min)
+2. **DevOps Team** (them): Receive outputs (ECR_URL, EKS_ENDPOINT) and deploy apps
+
+These outputs must be consumed by the application pipeline, enabling it to:
+
+- Build and push Docker images to ECR.
+- Connect to the EKS cluster with kubectl.
+- Configure service account roles through OIDC.
+
+Therefore, this project shows how to deploy modern AWS infrastructure using Terraform and GitHub Actions, applying security best practices (OIDC, least privilege) and environment separation (test/prod). The services used are:
+
+- Dedicated IAM user with least-privilege policies to deploy infrastructure components.
+- Custom VPCs with public subnets (Load Balancers) and private subnets (EKS nodes).
+- NAT Gateway with EIP and route tables.
+- Amazon ECR (Elastic Container Registry).
+- Amazon EKS (Elastic Kubernetes Service) with Managed Node Group.
+- IAM role for GitHub Actions (OIDC).
+- Cluster access via EKS Access Entries enabled with `authentication_mode = "API_AND_CONFIG_MAP"`.
+- Terraform remote state in S3.
+- State locking with DynamoDB.
+- CI/CD: GitHub Actions + OIDC.
+- Two separate environments: TEST and PROD with different flows.
+
+## 2. Architecture
+
+```mermaid
+flowchart LR
+  GH[GitHub Actions]
+  OIDC[IAM OIDC Provider<br/>token.actions.githubusercontent.com]
+  ROLE[IAM Role<br/>gh-oidc-terraform-infra-devops-aws]
+  STATE[S3 Backend<br/>tfstate-devops-henry-1720]
+  LOCKS[DynamoDB Lock Table<br/>tfstate-locks-devops]
+
+  GH -->|OIDC AssumeRole| ROLE
+  ROLE -->|terraform init/plan/apply| STATE
+  ROLE -->|state locking| LOCKS
+
+  subgraph AWS[AWS us-east-1]
+    subgraph TEST[Environment: TEST]
+      TVPC[VPC 10.110.0.0/16]
+      TPUB[Public Subnets<br/>10.110.10.0/24<br/>10.110.11.0/24]
+      TPRI[Private Subnets<br/>10.110.20.0/24<br/>10.110.21.0/24]
+      TIGW[Internet Gateway]
+      TNAT[NAT Gateway + EIP]
+      TEKS[EKS<br/>eksdevops1720test]
+      TNODES[Managed Node Group<br/>t3.medium x2..5]
+      TECR[ECR<br/>ecrdevops1720test]
+    end
+
+    subgraph PROD[Environment: PROD]
+      PVPC[VPC 10.111.0.0/16]
+      PPUB[Public Subnets<br/>10.111.10.0/24<br/>10.111.11.0/24]
+      PPRI[Private Subnets<br/>10.111.20.0/24<br/>10.111.21.0/24]
+      PIGW[Internet Gateway]
+      PNAT[NAT Gateway + EIP]
+      PEKS[EKS<br/>eksdevops1720prod]
+      PNODES[Managed Node Group<br/>t3.medium x2..5]
+      PECR[ECR<br/>ecrdevops1720prod]
+    end
+  end
+
+  ROLE --> TEST
+  ROLE --> PROD
+
+  TVPC --> TPUB
+  TVPC --> TPRI
+  TPUB --> TIGW
+  TPUB --> TNAT
+  TPRI --> TNAT
+  TPRI --> TEKS
+  TEKS --> TNODES
+  GH -. docker push .-> TECR
+
+  PVPC --> PPUB
+  PVPC --> PPRI
+  PPUB --> PIGW
+  PPUB --> PNAT
+  PPRI --> PNAT
+  PPRI --> PEKS
+  PEKS --> PNODES
+  GH -. docker push .-> PECR
+```
+
+A clearer version of the architecture is shown below.
+  ![Architecture Diagram](./assets/diagrams/aws/aws_infrastructure_diagram.png)
+
+If you want more detail, go to `assets/diagrams` and you will find out the CI/CD, and Network Diagrams.
+
+## 3. AWS Infrastructure Components
+
+- **Region**: `us-east-1`
+- **Terraform remote backend**
+  - S3 for state: `tfstate-devops-henry-1720`
+    - keys (separate states per environment inside the same backend)
+      - `test/infra.tfstate`
       - `prod/infra.tfstate`
-  - DynamoDB para locking: `tfstate-locks-devops`
-    ![S3 Bucket para state](./assets/img/7.1.png)
+  - DynamoDB for locking: `tfstate-locks-devops`
 
-- **Infraestructura dev**:
-  - vpc_name: `devops-aws-test-vpc`
+- **Dev infrastructure**:
+  - vpc_name: `vpc-infra-aws-test`
     ![VPC subnets test](./assets/img/10.png)
     - Elastic Kubernetes Service (EKS): `eksdevops1720test`
       ![EKS Test](./assets/img/17.png)
-    - Elastic Container Registry (ECR): `devops-microservice-test`
+    - Elastic Container Registry (ECR): `ecrdevops1720test`
 
-- **Infraestructura prod**:
-  - vpc_name: `devops-aws-test-vpc`
+- **Prod infrastructure**:
+  - vpc_name: `vpc-infra-aws-prod`
     ![VPC subnets prod](./assets/img/11.png)
-    - Elastic Kubernetes Service (EKS): `eksdevops1720test`
+    - Elastic Kubernetes Service (EKS): `eksdevops1720prod`
       ![EKS Prod](./assets/img/16.png)
-    - Elastic Container Registry (ECR): `devops-microservice-test`
+    - Elastic Container Registry (ECR): `ecrdevops1720prod`
 
-En resumen:
+In summary:
 
-- VPC dedicada por ambiente
-  ![VPCs](./assets/img/9.png) 
+- Dedicated VPC per environment
+  ![VPCs](./assets/img/9.png)
   - Subnets
   - Route Tables
   - Internet Gateways
-- EKS Cluster por ambiente v1.32
-  ![EKS por ambiente](./assets/img/13.png)
-- ECR repositorios por ambiente para imagenes Docker
+- EKS cluster per environment v1.34
+  ![EKS per environment](./assets/img/13.png)
+- ECR repositories per environment for Docker images
   ![Private Repositories](./assets/img/12.png)
 
-## Costos estimados 
-- **EKS Control Plane**: ~$0.10 por hora
-- **EC2 Nodes**: mínimo 2 nodos y dependen del tipo de instancia: `BOTTLEROCKET_x86_64` *(no tan económico)* 
-- **ECR**: bajo costo (almacenamiento por GB)
-- **S3 + DynamoDB**: mínimo costo
+## 4. Project Structure
 
-![Análisis de Costos](./assets/img/13.png)
+```text
+infra-devops-aws/
+├── .github/
+│   ├── workflows/
+│   │   ├── destroy-infra-prod.yml
+│   │   ├── destroy-infra-test.yml
+│   │   └── terraform.yml
+├── terraform/
+│   ├── modules/
+│   │   ├── vpc
+│   │   ├── eks
+│   │   └── ecr
+│   ├── backend.tf
+│   ├── locals.tf
+│   ├── main.tf
+│   ├── outputs.tf
+│   ├── providers.tf
+│   ├── variables.tf
+│   └── versions.tf
+├── environments/
+│   ├── test.tfvars
+│   └── prod.tfvars
+├── backends/
+│   ├── test.hcl
+│   └── prod.hcl
+├── scripts/
+│   ├── bootstrap_backend.sh
+│   ├── bootstrap_oidc.sh
+│   ├── destroy_backend.sh
+│   └── destroy_oidc.sh
+└── README.md
 
-## Entornos
 
-Se tiene 2 entornos para este proyecto:
+- workflows/ → deployment and destroy pipelines.
+- modules/ → reusable modules (VPC, EKS, ECR).
+- environments/ → environment-specific variables (test/prod).
+- backends/ → remote backend configuration (S3 + DynamoDB).
+- scripts/ → initial bootstrap automation.
 
-- **DEV**: cualquier push a ramas `dev/**`: despliega en DEV, es decir, deploy automático sin aprobación manual.
-- **PROD**: merge a `main` despliega en PROD y requiere aprobación manual en GitHub Environment.
+### 4.1 Environments
 
-El estado remoto de Terraform usa llaves separadas pero mismo S3 Bucket:
+There are 2 environments in this project:
 
-- `dev/infra.tfstate`
+- **TEST**: any push to `dev/**` branches deploys to DEV, meaning automatic deploy without manual approval.
+- **PROD**: merge to `main` deploys to PROD and requires manual approval in GitHub Environment.
 
-    Actualizar imagen
-   ![Llave en DEV definida en el archivo backends/dev.hcl](./assets/img/7.png)
-    Ir al archivo [backends/dev.hcl](./backends/dev.hcl)
+Terraform remote state uses separate keys but the same S3 bucket:
+
+- `test/infra.tfstate`
+
+   ![DEV key defined in backends/dev.hcl](./assets/img/33.png)
+   Go to file [backends/dev.hcl](./backends/dev.hcl)
 
 - `prod/infra.tfstate`
 
-    Actualizar imagen
-   ![Llave en PROD definida en el archivo backends/prod.hcl](./assets/img/8.png)
-    Ir al archivo [backends/prod.hcl](./backends/prod.hcl)
+   ![DEV key defined in backends/dev.hcl](./assets/img/34.png)
+   Go to file [backends/prod.hcl](./backends/prod.hcl)
 
-## Setup del proyecto
+## 5. Project Setup
 
-**0. Clonar el repo:**
+**0. Clone the repository:**
 ```bash
 git clone https://github.com/hsniama/infra-devops-aws
 cd infra-devops-aws
 ```
-**1. Configurar AWS CLI**
+
+---
+
+**1. Configure AWS CLI**
 ```bash
 aws configure
 ```
-Se te pedirá ingresar los siguientes valores:
-- `AWS Access Key ID` → <tu clave>
-- `AWS Secret Access Key` → <tu clave secreta>
+You will be asked to enter the following values:
+- `AWS Access Key ID` → `<your key>`
+- `AWS Secret Access Key` → `<your secret key>`
 - `Default region name` → us-east-1
-- `Default output son` → json
+- `Default output format` → json
 
-
-Verificar identidad:
+Verify identity:
 ```bash
 aws sts get-caller-identity
 ```
-Nota Importante:
 
-1. Antes de configurar tu cuenta con `aws configure` y después validarla con `aws sts get-caller-identity`, primero debes/debías crear una nueva cuenta por el IAM de AWS y obtener el AccessKeyID y el SecretAccessKey.
-2. Una ves hallas creado tu cuenta/usuario en IAM y hayas terminado de configurararlo y validar su identidad, hay dos opciones muy importantes a considerar:
-  a. **Usuario IAM con AdministratorAccess** *(Recomendado)*: Adjunta/Enlaza manualmente la política `AdministratorAccess` del tipo "AWS managed" al usuario recién creado en IAM para tener acceso total a servicios y recursos en AWS sin límite. 
-  b. **Usuario IAM con Managed Policies**: Se adjunta políticas del tipo "customer managed" con permisos exactos para lo que se necesita en este proyecto reduciendo así el riesgo de dar permisos de más. Esta configuración personalizada se lo realiza en el siguiente archivo de [Configuración del Usuario](./assets/Readmes/ConfigUser.md).
+Important note:
 
-**2. Crear Backend remoto (S3 + DynamoDB)**
-Ejecutar el script `bootstrap_backend.sh`:
+1. Before configuring your account with `aws configure` and validating it with `aws sts get-caller-identity`, you must first create a new IAM user in AWS and obtain the AccessKeyID and SecretAccessKey.
+2. Once you have created your IAM account or user, completed its configuration, and validated its identity, there are two key options to consider for granting CRUD permissions to the services and resources managed by Terraform:
+
+  a. **IAM user with AdministratorAccess** *(No Recommended)*: manually attach the `AdministratorAccess` policy (AWS managed) to the new IAM user to have full access to AWS services and resources.
+
+    ![User with SuperAdmin provileges](./assets/img/36.png) 
+
+  b. **IAM user with Managed Policies** *(Recommended)*: attach customer-managed policies with exact permissions needed for this project, reducing the risk of over-permissioning. This custom setup is described here: [User Configuration](./assets/Readmes/ConfigUser.md). However, for the sake of time and simplicity, you could follow option A mentioned above.
+
+    ![Terraform User with 4 Policies](./img/2.png)
+---
+
+**2. Create remote backend (S3 + DynamoDB)**
+Once the policies mentioned in the previous section have been added, run the `bootstrap_backend.sh` script:
 ```bash
 chmod +x scripts/bootstrap_backend.sh
 scripts/bootstrap_backend.sh <region> <bucket_name> <dynamodb_table>
 ```
-Ejemplo:
+Example:
 ```bash
 ./scripts/bootstrap_backend.sh us-east-1 tfstate-devops-henry-1720 tfstate-locks-devops
 ```
-En donde <region> es la región de AWS en la cual estamos trabajando, <bucket_name> es el nombre completo del bucket a crear, y <dynamodb_table> es el nombre de la tabla de dynamodb.
+Where `<region>` is the AWS region in use, `<bucket_name>` is the full bucket name to create, and `<dynamodb_table>` is the DynamoDB table name.
 
-Este script crea:
-- S3 bucket para state
-- DynamoDB table para locking
-- Keys para ambientes test y prod
+This script creates:
+- S3 bucket for state: `tfstate-devops-henry-1720`
+  ![S3 bucket for state](./assets/img/35.png)
+- DynamoDB table for locking: `tfstate-locks-devops`
+  ![DynamoDB for state](./assets/img/7.1.png)
+- Keys for test and prod environments
+  ![Keys by environment](./assets/img/7.png)
 
-  ![Bucket Creado](./assets/img/7.png)
-
-Guardar los valores generados de *bucket*, *key*, *region*, y *dynamodb_table* y colocarlos en los archivos:
+Save generated values for *bucket*, *key*, *region*, and *dynamodb_table* and put them in files:
 - `backends/dev.hcl`
 - `backends/dev.hcl`
 
-**3. Crear IAM Role para OIDC (GitHub Actions)**
-Ejecutar el script `bootstrap-oidc.sh`:
+---
+
+**3. Create IAM role for OIDC (GitHub Actions)**
+Run script `bootstrap_oidc.sh`:
 ```bash
 chmod +x scripts/bootstrap_oidc.sh
 ./scripts/bootstrap_oidc.sh <account_id> <repo_full_name> <role_name> <region>
 ```
-Ejemplo:
+Example:
 ```bash
 ./scripts/bootstrap_oidc.sh 035462351040 hsniama/infra-devops-aws gh-oidc-terraform-infra-devops-aws us-east-1
 ```
-En donde <account_id> es el ID de tu cuenta, <repo_full_name> es el nombre completo de tu repositorio de GitHub, <role_name> es el nombre del rol que asignamos, puede ser el mismo y <region> es la región de AWS en la cual estamos trabajando.
+Where `<account_id>` is your AWS account ID, `<repo_full_name>` is your full GitHub repository name, `<role_name>` is the role name to assign, and `<region>` is the AWS region in use.
 
-Este script crea:
+This script creates:
 
-- IAM Role: `gh-oidc-terraform-infra-devops-aws`
-- Trust policy con GitHub OIDC
-- Permisos suficientes para:
+- IAM role: `gh-oidc-terraform-infra-devops-aws`
+- Trust policy with GitHub OIDC
+- Sufficient permissions for creating the following resources:
   - EKS
   - ECR
   - VPC
@@ -158,175 +314,195 @@ Este script crea:
   - IAM
   - DynamoDB
 
-Resultado de la ejecución del script:
+Script output example:
 
 ```json
 DONE.
 Set this GitHub secret in infra-devops-aws repo:
 AWS_ROLE_TO_ASSUME = arn:aws:iam::0354623XXXXX:role/gh-oidc-terraform-infra-devops-aws
 ```
-Se debe guardar el ARN generado `AWS_ROLE_TO_ASSUME` como GitHub secret en tu repositorio el cual se detalla más adelante.
 
-En conclusión, se tendrá el rol `gh-oidc-terraform-infra-devops-aws` con el policy `gh-oidc-terraform-infra-devops-aws-policy` enlazado.
+You must save the generated `AWS_ROLE_TO_ASSUME` ARN as a GitHub secret in your repository, explained later.
 
-  ![Rol Creado](./assets/img/8.png)
+In conclusion, you will have role `gh-oidc-terraform-infra-devops-aws` with policy `gh-oidc-terraform-infra-devops-aws-policy` attached.
 
-Para comprender la función de este script, dirigirse al [Anexo](./assets/Readmes/Anexos.md).
+![Created Role](./assets/img/8.png)
 
-**4. Configuración de GitHub Environments**
+Note:  
+GitHub Actions uses an IAM OIDC Role to deploy the infrastructure and:
 
-Se crea los environments en el repo > settings > Environments:
-- `dev` 
-- `prod`: Se activa el "Required reviewers" para que prod no aplique sin aprobación.
+- Create resources such as VPC, EKS, ECR, and more.
+- Generate an Access Entry for the `terraformUser` (in my case), enabling it to manage the EKS cluster.
 
-![Configuración de los 2 Environments.](./assets/img/19.png)
 
-En el caso del ambiente de `prod`, en *Required reviewers* me pongo a mi mismo:
-
-![Required Reviewer](./assets/img/20.png)
-
-**5. Crear Secrets y Variables en GitHub**
-
-Crear el siguiente Secret (obtenido en la ejecución del script `bootstrap-oidc.sh`) con su respectivo valor en repo > settings > secrets & variables > actions > secrets:
-
-![Configuración de secrets](./assets/img/21.png)
-
-En mi caso:
-- `AWS_ROLE_TO_ASSUME` → arn:aws:iam::03546XXXX:role/gh-oidc-terraform-infra-devops-aws
-
-El workflow `terraform.yml` de GitHub Actions, usa este rol (AWS_ROLE_TO_ASSUME) con OIDC para obtener credenciales temporales en AWS.
-
-Ahora, se debe crear la siguiente variable en Actions > Variables:
-
-![Configuración de secrets](./assets/img/21.png)
-
-En mi caso:
-- `AWS_REGION` → us-east-1
-
-**6. Setear variables de Terraform**
-
-Se debe especificar los valores de las siguientes variables que deben ser únicas a nivel global en AWS:
-
-- eks_name
-- ecr_repo_name
-- principal_arn del Usuario IAM creado en los primeros pasos (Se obtiene ejecutando el comando aws sts get-caller-identity)
-- principal_arn del del role OIDC de GitHub Actions (Es el resultado de la ejecución del script `bootstrap-oidc.sh` en el paso 3 )
-
-Para `DEV` modificar las variables en el archivo `enviroments/dev.tfvars`:
-![Configuración de variables.](./assets/img/23.png)
-Para `PROD` modificar las variables en el archivo `enviroments/prod.tfvars`:
-![Configuración de variables.](./assets/img/24.png)
-
-Las demás variables como `node_instance_types`, `node_ami_type` así como el resto, son opcionales.
-
-## Ejecución del Pipeline
-
-**Workflow: terraform.yml**
-
-Este pipeline ésta ubicado en la ruta [.github/workflows/terraform.yml](./.github/workflows/terraform.yml) y está diseñado para manejar los despliegues de la infraestructura en AWS con Terraform + GitHub Actions, diferenciando entre ambientes de test y prod según el evento que lo dispare. 
-
-El workflow se ejecuta en formas distintas:
-
-Para el ambiente de `TEST`:
-
-1. Push a ramas dev/**
-- Corre plan + apply en el ambiente test despues del `git commit -m ""` y `git push`.
-- Permite validar cambios en el entorno de prueba sin afectar producción.
-
-Para el ambiente de `PROD`:
-
-1. Pull Request hacia main
-- Corre el `Terraform plan` en modo prod.
-- Sirve para revisar qué cambios se aplicarían en producción antes de hacer el merge.
-- No ejecuta apply, solo muestra el plan.
-
-2. Merge a main
-- Corre plan + apply en ambiente prod una vez se aprueba el merge en el PR.
-- Despliega la infraestructura real en producción.
+To understand this script in detail, go to the [Appendix](./assets/Readmes/Anexos.md).
 
 ---
 
-Nota:
-Con el fín de validar y analizar de forma breve nuestra infraestructura sin la necesidad de hacer cambios, commits, pushes, abrir y aprobar PRs, se agregó la facilidad de correr este workflow de forma manual (workflow_dispatch) para desplegar la infraestrctura tanto en el ambiente de `TEST` como `PROD` lo cual:
+**4. GitHub Environments configuration**
 
-- Permite lanzar el workflow desde la interfaz de GitHub Actions.
-- Tiene un input environment con opciones test o prod para elegir el ambiente a desplegar.
-- Es útil para pruebas y despliegues controlados.
+Create environments in repo > settings > Environments:
+- `dev`
+- `prod`: enable "Required reviewers" so prod cannot apply without approval.
 
-Nos dirigimos a Actions > Workflows > terraform.yml > Run Workflow  y escoger la rama `Branch: dev/henry` para desplegar en `TEST` o la rama `Branch: main`  para desplegar en `PROD`. Finalmente, presionar en Run Workflow  y el pipeline se ejecutará.
+![Configuration of both environments](./assets/img/19.png)
+
+For `prod`, in *Required reviewers*, set yourself as reviewer:
+
+![Required Reviewer](./assets/img/20.png)
+
+---
+
+**5. Create GitHub Secrets and Variables**
+
+Create this secret (from `bootstrap_oidc.sh`) with its value in repo > settings > secrets & variables > actions > secrets:
+
+![Secret configuration](./assets/img/21.png)
+
+In this case:
+- `AWS_ROLE_TO_ASSUME` → arn:aws:iam::03546XXXX:role/gh-oidc-terraform-infra-devops-aws
+
+The GitHub Actions workflow `terraform.yml` uses this role (`AWS_ROLE_TO_ASSUME`) with OIDC to get temporary AWS credentials.
+
+Then create this variable in Actions > Variables:
+
+![Secret configuration](./assets/img/21.png)
+
+In this case:
+- `AWS_REGION` → us-east-1
+
+---
+
+**6. Set Terraform variables**
+
+You must specify values for the following variables, which must be globally unique in AWS:
+
+- eks_name
+- ecr_repo_name
+- principal_arn of the IAM user created in earlier steps (get it by running `aws sts get-caller-identity`)
+- principal_arn of the GitHub Actions OIDC role (result of `bootstrap_oidc.sh` in step 3)
+
+For `DEV`, modify variables in `enviroments/dev.tfvars`:
+![Variable configuration](./assets/img/23.png)
+For `PROD`, modify variables in `enviroments/prod.tfvars`:
+![Variable configuration](./assets/img/24.png)
+
+Other variables like `node_instance_types`, `node_ami_type`, and the rest are optional.
+
+## 6. CI/CD Pipeline Execution
+
+**Workflow: terraform.yml**
+
+This pipeline is located at [.github/workflows/terraform.yml](./.github/workflows/terraform.yml) and is designed to manage AWS infrastructure deployments with Terraform + GitHub Actions, differentiating between test and prod environments based on the triggering event.
+
+The workflow runs in different ways:
+
+For `TEST`:
+
+1. Push to `dev/**` branches
+- Runs plan + apply in test environment after `git commit -m ""` and `git push`.
+- Allows validating changes in the test environment without affecting production.
+
+For `PROD`:
+
+1. Pull Request to main
+- Runs `Terraform plan` in prod mode.
+- Lets you review what changes would be applied to production before merge.
+- Does not run apply, only shows the plan.
+
+2. Merge to main
+- Runs plan + apply in prod after PR merge approval.
+- Deploys real production infrastructure.
+
+![Workflow Execution](./assets/diagrams/aws/cicd_pipeline.png)
+
+---
+
+Note:
+To validate and inspect infrastructure quickly without making changes, commits, pushes, or opening/approving PRs, this workflow can also be run manually (`workflow_dispatch`) for both `TEST` and `PROD`:
+
+- Lets you trigger the workflow from GitHub Actions UI.
+- Has an `environment` input with `test` or `prod`.
+- Useful for tests and controlled deployments.
+
+Go to Actions > Workflows > terraform.yml > Run Workflow and choose `Branch: dev/henry` for `TEST` or `Branch: main` for `PROD`. Then click Run Workflow and the pipeline will execute.
 
 ![Run Workflow](./assets/img/25.png)
 
-Recuerda, que en el caso de correr en PROD, el pipeline se ejecuta pero necesita un *approval* del reviewer que fue configurado en el ambiente de prod en GitHub Environments.
+Remember: for PROD, the pipeline runs but still requires reviewer approval configured in GitHub Environments.
 
-![Run Workflow with approve](./assets/img/26.png)
+![Run Workflow with approval](./assets/img/26.png)
 
+For more details on how this workflow works and what it contains, go to the [Appendix](./assets/Readmes/Anexos.md).
 
-Para más detalles de como funciona este workflow y que contiene, dirígete al [Anexo](./assets/Readmes/Anexos.md).
+### 6.1 Outputs and Artifacts
 
-## Outputs y Artifacts
-
-Después de que el pipeline finalice correctamente, revisar el step:
+After the pipeline completes successfully, check the step:
 
 **Terraform output**
 
-Valores obtenidos y necesarios:
+Required values:
 
-- aws_region
-- ecr_repository_name
-- ecr_repository_url
-- eks_cluster_name
-- eks_cluster_endpoint
-- eks_oidc_issuer
+- aws_region → region where infrastructure was deployed.
+- ecr_repository_name → ECR repository name.
+- ecr_repository_url → URL for docker push.
+- eks_cluster_name → EKS cluster name.
+- eks_cluster_endpoint → API server endpoint for kubectl.
+- eks_oidc_issuer → OIDC issuer, useful for IRSA (roles for service accounts).
 
 ![Outputs](./assets/img/27.png)
 
-Estos serán usados por el repo de microservicios para:
+These are used by the microservices repository for:
 - docker build
-- docker push a ECR
+- docker push to ECR
 - aws eks update-kubeconfig
 - kubectl apply
 
-Es decir, los outputs suficientes:
+In other words, these variables/outputs are used in the microservices repository as follows:
+- Build & Push: the microservice builds its Docker image and pushes it to `ecr_repository_url`.
+- Deploy: it uses `eks_cluster_name` and `eks_cluster_endpoint` to connect with kubectl and apply manifests.
+- Auth: it uses `eks_oidc_issuer` if service account roles (IRSA) are configured.
 
-- Cluster name y endpoint → para conectar kubectl.
-- ECR repo URL → para subir y referenciar imágenes.
-- OIDC issuer → útil si configuramos IRSA (roles para service accounts).
+Also, after pipeline execution, GitHub Actions stores these artifacts from the jobs:
+- terraform-plan-logs-prod/test → log file (`terraform.log`) generated during plan. Useful for debugging if something fails or to review planned resource changes.
+- terraform-apply-logs-prod/test → log file (`terraform.log`) generated during apply. Records everything Terraform actually did in AWS.
+- tfplan-prod/test → exact Terraform plan output (`terraform plan`). Used as input for apply to ensure exactly what was reviewed is applied.
 
-También, al concluir la ejecución del pipeline, se obtienen los siguientes artifacts que GitHub Actions guarda como resultado de los jobs:
-- terraform-plan-logs-prod/test → Archivo de log (terraform.log) generado durante el plan. Sirve para depuración: si algo falla o quieres revisar qué recursos se iban a crear/modificar, puedes abrir este log.
-- terraform-apply-logs-prod/test → Archivo de log (terraform.log) generado durante el apply. Registra todo lo que Terraform hizo efectivamente en AWS. Es la evidencia del despligue.
-- tfplan-prod/test → Contiene el plan exacto que generó Terraform (terraform plan). Se usa como input en el job apply para garantizar que se aplique exactamente lo que se revisó en el plan.
+![Artifacts](./assets/img/28.png).
 
-![Artifacts](./assets/img/28).
+### 6.2 Cluster Connection
 
-## Conexión al Cluster
-
-Una vez ejecutado correctamente el workflow *terraformn.yml*, ya es posible conectarse al cluster mediante el siguiente comando:
+Once `terraform.yml` finishes successfully, you can connect to the cluster with:
 ```bash
 aws eks update-kubeconfig --region <REGION> --name <CLUSTER_NAME>
 ```
-En donde:
-- <REGION> → es la regió que habías configurado al inicio.
-- <CLUSTER_NAME> → es el nombre del eks_name configurado en los archivos .tfvars
+Where:
+- `<REGION>` → the region configured earlier.
+- `<CLUSTER_NAME>` → `eks_name` configured in `.tfvars` files.
 
-Ejemplo:
+Example:
 ```bash
 aws eks update-kubeconfig --region us-east-1 --name eksdevops1720test
 
 kubectl get nodes
 ```
-El acceso está habilitado mediante EKS Access Entries en donde podemos listar todos los Access Entries configurados en nuestro cluster EKS con el siguiente comando:
+
+![Command results](/assets/img/31.png).
+
+Access is enabled through EKS Access Entries. You can list all configured entries with:
 
 ```bash
 aws eks list-access-entries --cluster-name <CLUSTER_NAME> --region <REGION>
 ```
-Nota:
-- Un Access Entry es el vínculo entre un principal de IAM (usuario o rol) y las políticas de acceso al cluster (ej. admin, readonly). El resultado te muestra cada ARN que tiene acceso al cluster y qué policies están asociadas. Es como decir: “Muéstrame todos los usuarios/roles que tienen permisos en este cluster”.
 
-Una vez ya conectados al cluster ya se puede construir y subir la imagen al ECR Repositorio usando el output *ECR Repo URL* del pipeline:
+Note:
+- An Access Entry links an IAM principal (user or role) to cluster access policies (for example admin or readonly). The result shows each ARN with cluster access and associated policies.
 
-Por ejemplo:
+![Command results](/assets/img/32.png).
+
+After connecting to the cluster, you can build and push the image to the ECR repository using the pipeline output *ECR Repo URL*:
+
+For example:
 ```bash
 aws ecr get-login-password --region us-east-1 \
   | docker login --username AWS --password-stdin <ECR_REPO_URL>
@@ -337,22 +513,44 @@ docker tag devops-microservice-test:latest \
 
 docker push <ECR_REPO_URL>/devops-microservice-test:latest
 ```
-En donde:
-- <ECR_REPO_URL> puede ser `035462531040.dkr.ecr.us-east-1.amazonaws.com`
 
-También ya podríamos crear y exponer manifiestos y servicios de kubernetes para exponerlo dentro del cluster, etc., mediante otro pipeline en otro repositorio (repo de la aplicación).
+Where:
+- `<ECR_REPO_URL>` can be `035462531040.dkr.ecr.us-east-1.amazonaws.com`
 
-## Limpieza
-Estos dos workflows sirven para hacer limpieza de la infraestructura.
+You could also create and expose Kubernetes manifests and services in the cluster via another pipeline in another repository (application repository).
 
-Si desea eliminar la infraestructura en `TEST`, ejecuto manualmente el workflow `destroy-infra-test.yml`.
-Si desea eliminar la infraestructura en `PROD`, ejecuto manualmente el workflow `destroy-infra-prod.yml`. Sin embargo, aquí requiero un *approval* del reviewer.
+### 6.3 Cleanup
+These two workflows are used to clean up infrastructure.
 
+If you want to delete `TEST` infrastructure, run workflow `destroy-infra-test.yml` manually selecting branch `Branch:dev/henry`.
+![Destroy test](/assets/img/29.png).
 
-## Conclusión
-En este proyecto:
+If you want to delete `PROD` infrastructure, run workflow `destroy-infra-prod.yml` manually selecting branch `Branch:main`. However, reviewer approval is required.
+![Destroy prod](/assets/img/30.png).
 
-- No se necesita Access Keys en GitHub.
-- GitHub Actions obtiene credenciales temporales vía OIDC y permite que se autentique en AWS sin usar llaves estáticas.
-- Terraform puede desplegar infraestructura en AWS (de acuerdo a los requisítos de este proyecto) de forma segura y automatizada.
-- El usuario terraformUser (en mi caso) tiene permisos mínimos para crear el OIDC, sin ser administrador, gracias a las policy previamente añadidas.
+## 7. Security
+
+Security details are explained in the following section.
+
+[Click Here](./assets/Readmes/Security.md).
+
+## 8. Conclusion
+In this project:
+
+- Access keys are not needed in GitHub.
+- GitHub Actions gets temporary credentials via OIDC and authenticates to AWS without static keys.
+- Terraform can deploy AWS infrastructure (according to this project requirements) in a secure and automated way.
+- The `terraformUser` user (in this case) has minimum required permissions (least privilege) to create OIDC without being an administrator, thanks to previously attached policies.
+
+## 9. Glossary and Technical Concepts
+
+To review the technical concepts and definitions used in this project, [click here](./assets/Readmes/Glossary.md).
+
+## 10 Contact & Community
+
+For any questions: **henryniama@hotmail.com**
+
+⭐ Give this project a star on GitHub  
+🔄 Share it with your team  
+💬 Leave your feedback and comments  
+🤝 Contribute to the project

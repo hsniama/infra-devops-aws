@@ -1,0 +1,28 @@
+flowchart LR
+  GH[GitHub Actions + OIDC]
+  TF[Terraform]
+
+  subgraph AWS[AWS us-east-1]
+    STATE[S3 State + DynamoDB Lock]
+
+    subgraph TEST[TEST]
+      TVPC[VPC]
+      TEKS[EKS]
+      TECR[ECR]
+      TVPC --> TEKS
+      TEKS -. images .-> TECR
+    end
+
+    subgraph PROD[PROD]
+      PVPC[VPC]
+      PEKS[EKS]
+      PECR[ECR]
+      PVPC --> PEKS
+      PEKS -. images .-> PECR
+    end
+  end
+
+  GH --> TF
+  TF --> STATE
+  TF --> TEST
+  TF --> PROD

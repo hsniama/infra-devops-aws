@@ -51,21 +51,6 @@ resource "aws_route_table_association" "public_assoc" { //Asocia cada subnet pú
   route_table_id = aws_route_table.public.id // Así, todas las subnets públicas heredan la ruta hacia Internet.
 }
 
-// PRIVADAS
-
-resource "aws_subnet" "private" {
-  count             = length(var.private_subnet_cidrs)
-  vpc_id            = aws_vpc.this.id
-  cidr_block        = var.private_subnet_cidrs[count.index]
-  availability_zone = data.aws_availability_zones.azs.names[count.index]
-
-  tags = {
-    Name                                        = "subnet-private-${var.name_prefix}-${count.index}"
-    "kubernetes.io/role/internal-elb"           = "1"      # Subnets privadas (para balanceadores internos).
-    "kubernetes.io/cluster/${var.cluster_name}" = "shared" # Tag para que EKS reconozca las subnets.
-  }
-}
-
 # EIP para NAT Gateway
 resource "aws_eip" "nat" {
   domain = "vpc"
@@ -86,6 +71,23 @@ resource "aws_nat_gateway" "nat" {
   }
 }
 
+// SUBNETS PRIVADAS
+
+resource "aws_subnet" "private" {
+  count             = length(var.private_subnet_cidrs)
+  vpc_id            = aws_vpc.this.id
+  cidr_block        = var.private_subnet_cidrs[count.index]
+  availability_zone = data.aws_availability_zones.azs.names[count.index]
+
+  tags = {
+    Name                                        = "subnet-private-${var.name_prefix}-${count.index}"
+    "kubernetes.io/role/internal-elb"           = "1"      # Subnets privadas (para balanceadores internos).
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared" # Tag para que EKS reconozca las subnets.
+  }
+}
+
+
+
 # Route table privada
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.this.id
@@ -95,6 +97,13 @@ resource "aws_route_table" "private" {
   }
 }
 
+# Asociar TODAS las subnets privadas a la route table privada
+resource "aws_route_table_association" "private_assoc" {
+  count          = length(aws_subnet.private)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private.id
+}
+
 # Ruta default privada -> NAT
 resource "aws_route" "private_nat" {
   route_table_id         = aws_route_table.private.id
@@ -102,9 +111,3 @@ resource "aws_route" "private_nat" {
   nat_gateway_id         = aws_nat_gateway.nat.id
 }
 
-# Asociar TODAS las subnets privadas a la route table privada
-resource "aws_route_table_association" "private_assoc" {
-  count          = length(aws_subnet.private)
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private.id
-}
