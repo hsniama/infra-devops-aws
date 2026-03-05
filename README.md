@@ -258,11 +258,11 @@ Important note:
 
   a. **IAM user with AdministratorAccess** *(No Recommended)*: manually attach the `AdministratorAccess` policy (AWS managed) to the new IAM user to have full access to AWS services and resources.
 
-    ![User with SuperAdmin provileges](/assets/img/36.png) 
+  ![User with SuperAdmin provileges](./assets/img/36.png) 
 
   b. **IAM user with Managed Policies** *(Recommended)*: attach customer-managed policies with exact permissions needed for this project, reducing the risk of over-permissioning. This custom setup is described here: [User Configuration](./assets/Readmes/ConfigUser.md). However, for the sake of time and simplicity, you could follow option A mentioned above.
 
-    ![Terraform User with 4 Policies](/assets//img/2.png)
+  ![Terraform User with 4 Policies](./assets/img/2.png)
 ---
 
 **2. Create remote backend (S3 + DynamoDB)**
@@ -469,7 +469,7 @@ Also, after pipeline execution, GitHub Actions stores these artifacts from the j
 - terraform-apply-logs-prod/test → log file (`terraform.log`) generated during apply. Records everything Terraform actually did in AWS.
 - tfplan-prod/test → exact Terraform plan output (`terraform plan`). Used as input for apply to ensure exactly what was reviewed is applied.
 
-![Artifacts](./assets/img/28.png).
+![Artifacts](./assets/img/28.png)
 
 ### 6.2 Cluster Connection
 
@@ -488,7 +488,7 @@ aws eks update-kubeconfig --region us-east-1 --name eksdevops1720test
 kubectl get nodes
 ```
 
-![Command results](/assets/img/31.png).
+![Command results](/assets/img/31.png)
 
 Access is enabled through EKS Access Entries. You can list all configured entries with:
 
@@ -499,7 +499,7 @@ aws eks list-access-entries --cluster-name <CLUSTER_NAME> --region <REGION>
 Note:
 - An Access Entry links an IAM principal (user or role) to cluster access policies (for example admin or readonly). The result shows each ARN with cluster access and associated policies.
 
-![Command results](/assets/img/32.png).
+![Command results](/assets/img/32.png)
 
 After connecting to the cluster, you can build and push the image to the ECR repository using the pipeline output *ECR Repo URL*:
 
@@ -524,16 +524,16 @@ You could also create and expose Kubernetes manifests and services in the cluste
 These two workflows are used to clean up infrastructure.
 
 If you want to delete `TEST` infrastructure, run workflow `destroy-infra-test.yml` manually selecting branch `Branch:dev/henry`.
-![Destroy test](/assets/img/29.png).
+![Destroy test](/assets/img/29.png)
 
 If you want to delete `PROD` infrastructure, run workflow `destroy-infra-prod.yml` manually selecting branch `Branch:main`. However, reviewer approval is required.
-![Destroy prod](/assets/img/30.png).
+![Destroy prod](/assets/img/30.png)
 
 ## 7. Security
 
 Security details are explained in the following section.
 
-[Click Here](./assets/Readmes/Security.md).
+[Click Here](./assets/Readmes/Security.md)
 
 ## 8. Conclusion
 In this project:
