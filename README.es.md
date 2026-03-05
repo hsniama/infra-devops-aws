@@ -1,8 +1,9 @@
 # Repo: infra-devops-aws (Terraform + GitHub Actions + AWS + OIDC)
 
----
-
 Available in [English](README.es.md)
+
+---
+Post: https://dev.to/hsniama/construi-la-plataforma-aws-que-todos-los-devops-querrian-tener-2ab2
 
 ---
 
@@ -200,7 +201,7 @@ infra-devops-aws/
 │   ├── destroy_backend.sh
 │   └── destroy_oidc.sh
 └── README.md
-
+```
 
 - workflows/ → pipeline de despliegue y destrucción.
 - modules/ → módulos reutilizables (VPC, EKS, ECR).
@@ -258,11 +259,11 @@ Nota Importante:
 
   a. **Usuario IAM con AdministratorAccess** *(No Recomendado)*: Adjunta/Enlaza manualmente la política `AdministratorAccess` del tipo "AWS managed" al usuario recién creado en IAM para ejecutar los scripts de creación del Bucket + S3 y del OIDC Provider y administrar los recursos en general.
 
-    ![User with SuperAdmin provileges](./assets/img/36.png)
+    ![User with SuperAdmin provileges](/assets/img/36.png)
 
   b. **Usuario IAM con Managed Policies** *(Recomendado)*: Se adjunta políticas del tipo "customer managed" con permisos exactos para lo que se necesita en este proyecto reduciendo así el riesgo de dar permisos de más. Esta configuración personalizada se lo realiza en el siguiente archivo de [Configuración del Usuario](./assets/Readmes/ConfigUser.md). Sin embargo, por tiempo y simplicidad, puedes seguir la opción A antes mencionada.
 
-    ![Terraform User with 4 Policies](./img/2.png)
+    ![Terraform User with 4 Policies](/assets//img/2.png)
 ---
 
 **2. Crear Backend remoto (S3 + DynamoDB)**
