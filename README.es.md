@@ -470,7 +470,7 @@ También, al concluir la ejecución del pipeline, se obtienen los siguientes art
 - terraform-apply-logs-prod/test → Archivo de log (terraform.log) generado durante el apply. Registra todo lo que Terraform hizo efectivamente en AWS. Es la evidencia del despliegue.
 - tfplan-prod/test → Contiene el plan exacto que generó Terraform (terraform plan). Se usa como input en el job apply para garantizar que se aplique exactamente lo que se revisó en el plan.
 
-![Artifacts](/assets/img/28.png).
+![Artifacts](/assets/img/28.png)
 
 ### 6.2 Conexión al Cluster
 
@@ -489,7 +489,7 @@ aws eks update-kubeconfig --region us-east-1 --name eksdevops1720test
 kubectl get nodes
 ```
 
-![Resultados de comandos](/assets/img/31.png).
+![Resultados de comandos](/assets/img/31.png)
 
 El acceso está habilitado mediante EKS Access Entries en donde podemos listar todos los Access Entries configurados en nuestro cluster EKS con el siguiente comando:
 
@@ -499,7 +499,7 @@ aws eks list-access-entries --cluster-name <CLUSTER_NAME> --region <REGION>
 Nota:
 - Un Access Entry es el vínculo entre un principal de IAM (usuario o rol) y las políticas de acceso al cluster (ej. admin, readonly). El resultado te muestra cada ARN que tiene acceso al cluster y qué policies están asociadas. Es como decir: “Muéstrame todos los usuarios/roles que tienen permisos en este cluster”.
 
-![Resultados de comandos](/assets/img/32.png).
+![Resultados de comandos](/assets/img/32.png)
 
 
 Una vez ya conectados al cluster ya se puede construir y subir la imagen al ECR Repositorio usando el output *ECR Repo URL* del pipeline:
@@ -524,16 +524,16 @@ También ya podríamos crear y exponer manifiestos y servicios de kubernetes par
 Estos dos workflows sirven para hacer limpieza de la infraestructura.
 
 Si desea eliminar la infraestructura en `TEST`, ejecuto manualmente el workflow `destroy-infra-test.yml` escogiendo la rama `Branch:dev/henry`.
-![Destroy test](/assets/img/29.png).
+![Destroy test](/assets/img/29.png)
 
 Si desea eliminar la infraestructura en `PROD`, ejecuto manualmente el workflow `destroy-infra-prod.yml` escogiendo la rama `Branch:main`. Sin embargo, aquí requiero un *approval* del reviewer.
-![Destroy prod](/assets/img/30.png).
+![Destroy prod](/assets/img/30.png)
 
 ## 7. Serguridad
 
 A continuación, se explica el detalle de seguridad en e siguiente apartado.
 
-[Clic Aquí](./assets/Readmes/Security.md).
+[Clic Aquí](./assets/Readmes/Security.md)
 
 ## 8. Conclusión
 En este proyecto:
