@@ -1,8 +1,9 @@
 # Repo: infra-devops-aws (Terraform + GitHub Actions + AWS + OIDC)
 
----
-
 Disponible en [Español](README.es.md)
+
+---
+Post: https://dev.to/hsniama/i-built-the-aws-platform-that-every-devops-engineer-would-want-to-have-11fl
 
 ---
 
@@ -198,7 +199,7 @@ infra-devops-aws/
 │   ├── destroy_backend.sh
 │   └── destroy_oidc.sh
 └── README.md
-
+```
 
 - workflows/ → deployment and destroy pipelines.
 - modules/ → reusable modules (VPC, EKS, ECR).
@@ -257,11 +258,11 @@ Important note:
 
   a. **IAM user with AdministratorAccess** *(No Recommended)*: manually attach the `AdministratorAccess` policy (AWS managed) to the new IAM user to have full access to AWS services and resources.
 
-    ![User with SuperAdmin provileges](./assets/img/36.png) 
+    ![User with SuperAdmin provileges](/assets/img/36.png) 
 
   b. **IAM user with Managed Policies** *(Recommended)*: attach customer-managed policies with exact permissions needed for this project, reducing the risk of over-permissioning. This custom setup is described here: [User Configuration](./assets/Readmes/ConfigUser.md). However, for the sake of time and simplicity, you could follow option A mentioned above.
 
-    ![Terraform User with 4 Policies](./img/2.png)
+    ![Terraform User with 4 Policies](/assets//img/2.png)
 ---
 
 **2. Create remote backend (S3 + DynamoDB)**
